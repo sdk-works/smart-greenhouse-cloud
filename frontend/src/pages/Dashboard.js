@@ -135,6 +135,12 @@ export default function Dashboard() {
         humidity:      t.humidity || 0,
         co2_level:     t.co2_level || 0,
         soil_moisture: t.soil_moisture || 0,
+        soil_temperature: t.soil_temperature,
+        soil_ec: t.soil_ec,
+        ph_value: t.ph_value,
+        soil_nitrogen: t.soil_nitrogen,
+        soil_phosphorus: t.soil_phosphorus,
+        soil_potassium: t.soil_potassium,
       }));
       setHistory(data);
       if (data.length > 0) setLiveEnv(data[data.length - 1]);
@@ -231,6 +237,12 @@ export default function Dashboard() {
     { label: '温度',     val: liveEnv?.temperature,   unit: '°C',  color: '#FF7043', max: 50   },
     { label: '湿度',     val: liveEnv?.humidity,       unit: '%',   color: C.sky,     max: 100  },
     { label: '土壤湿度', val: liveEnv?.soil_moisture,  unit: '%',   color: C.green2,  max: 100  },
+    { label: '土壤温度', val: liveEnv?.soil_temperature,unit: '°C', color: '#FF8A65', max: 50   },
+    { label: '土壤EC',   val: liveEnv?.soil_ec,          unit: ' μS/cm', color:'#26A69A', max:3000 },
+    { label: '土壤pH',   val: liveEnv?.ph_value,         unit: '', color:'#AB47BC', max:14 },
+    { label: '氮',       val: liveEnv?.soil_nitrogen,    unit: ' mg/kg', color:'#42A5F5', max:500 },
+    { label: '磷',       val: liveEnv?.soil_phosphorus,  unit: ' mg/kg', color:'#FFA726', max:500 },
+    { label: '钾',       val: liveEnv?.soil_potassium,   unit: ' mg/kg', color:'#66BB6A', max:500 },
     { label: 'CO₂',     val: liveEnv?.co2_level,       unit: 'ppm', color: C.purple,  max: 1500 },
   ];
 

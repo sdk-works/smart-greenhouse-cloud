@@ -32,6 +32,12 @@ const CHARTS = [
   { metric:'temperature',    label:'温度',   color:'#FF7043', unit:'°C',   max:50    },
   { metric:'humidity',       label:'湿度',   color:'#4FC3F7', unit:'%',    max:100   },
   { metric:'soil_moisture',  label:'土壤湿度', color:'#81C784', unit:'%',  max:100   },
+  { metric:'soil_temperature',label:'土壤温度', color:'#FF8A65', unit:'°C', max:50    },
+  { metric:'soil_ec',        label:'土壤EC', color:'#26A69A', unit:'μS/cm', max:3000 },
+  { metric:'ph_value',       label:'土壤pH', color:'#AB47BC', unit:'', max:14       },
+  { metric:'soil_nitrogen',  label:'土壤氮', color:'#42A5F5', unit:'mg/kg', max:500 },
+  { metric:'soil_phosphorus',label:'土壤磷', color:'#FFA726', unit:'mg/kg', max:500 },
+  { metric:'soil_potassium', label:'土壤钾', color:'#66BB6A', unit:'mg/kg', max:500 },
   { metric:'co2_level',      label:'CO₂',   color:'#CE93D8', unit:'ppm',  max:1500  },
   { metric:'light_intensity',label:'光照强度', color:'#FFB74D', unit:'lux', max:50000 },
   { metric:'battery_level',  label:'电量',   color:'#00D9A5', unit:'%',    max:100   },
@@ -150,7 +156,7 @@ export default function DataCenter() {
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                     <thead>
                       <tr style={{ background:'rgba(0,217,165,0.07)' }}>
-                        {['时间（本地）','温度°C','湿度%','土壤%','CO₂ppm','光照lux','电量%'].map(h => (
+                        {['时间（本地）','任务','土壤水分%','土温°C','EC μS/cm','pH','氮 mg/kg','磷 mg/kg','钾 mg/kg','样本数','空气温度°C','湿度%','CO₂ppm','光照lux','电量%'].map(h => (
                           <th key={h} style={{ padding:'9px 12px', textAlign:'left', color:C.tealDk, fontWeight:700, borderBottom:`1px solid rgba(0,217,165,0.12)`, whiteSpace:'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -159,16 +165,24 @@ export default function DataCenter() {
                       {telemetry.slice(0,100).map((t,i) => (
                         <tr key={t.id} style={{ borderBottom:'1px solid rgba(0,0,0,0.03)', background: i%2===0 ? 'transparent' : 'rgba(0,217,165,0.02)' }}>
                           <td style={{ padding:'7px 12px', color:C.muted, whiteSpace:'nowrap' }}>{formatUTCtoLocal(t.timestamp)}</td>
+                          <td style={{ padding:'7px 12px', color:C.muted, whiteSpace:'nowrap' }}>{t.task_id ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#81C784', fontWeight:600 }}>{t.soil_moisture?.toFixed(1) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#FF8A65', fontWeight:600 }}>{t.soil_temperature?.toFixed(1) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#26A69A', fontWeight:600 }}>{t.soil_ec?.toFixed(0) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#AB47BC', fontWeight:600 }}>{t.ph_value?.toFixed(1) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#42A5F5', fontWeight:600 }}>{t.soil_nitrogen?.toFixed(0) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#FFA726', fontWeight:600 }}>{t.soil_phosphorus?.toFixed(0) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:'#66BB6A', fontWeight:600 }}>{t.soil_potassium?.toFixed(0) ?? '—'}</td>
+                          <td style={{ padding:'7px 12px', color:C.muted }}>{t.sample_count ?? '—'}</td>
                           <td style={{ padding:'7px 12px', color:'#FF7043', fontWeight:600 }}>{t.temperature?.toFixed(1) ?? '—'}</td>
                           <td style={{ padding:'7px 12px', color:'#4FC3F7', fontWeight:600 }}>{t.humidity?.toFixed(1) ?? '—'}</td>
-                          <td style={{ padding:'7px 12px', color:'#81C784', fontWeight:600 }}>{t.soil_moisture?.toFixed(1) ?? '—'}</td>
                           <td style={{ padding:'7px 12px', color:'#CE93D8', fontWeight:600 }}>{t.co2_level?.toFixed(0) ?? '—'}</td>
                           <td style={{ padding:'7px 12px', color:'#FFB74D', fontWeight:600 }}>{t.light_intensity?.toFixed(0) ?? '—'}</td>
                           <td style={{ padding:'7px 12px', color:C.tealDk, fontWeight:600 }}>{t.battery_level?.toFixed(0) ?? '—'}</td>
                         </tr>
                       ))}
                       {telemetry.length === 0 && (
-                        <tr><td colSpan={7} style={{ textAlign:'center', padding:40, color:C.muted }}>
+                        <tr><td colSpan={15} style={{ textAlign:'center', padding:40, color:C.muted }}>
                           <div style={{ fontSize:28, marginBottom:8 }}>📊</div>暂无数据，请选择大棚并等待设备上报
                         </td></tr>
                       )}
