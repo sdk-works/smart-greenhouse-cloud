@@ -10,6 +10,7 @@ import json
 import random
 import time
 import signal
+import uuid
 from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 
@@ -44,13 +45,20 @@ def on_connect(client, userdata, flags, rc):
 def send_telemetry():
     payload = {
         "type": "telemetry",
-        "msg_id": f"msg-{random.randint(1000,9999)}",
+        "msg_id": str(uuid.uuid4()),
+        "task_id": f"SIM-{int(time.time())}",
         "timestamp": int(datetime.now().timestamp()),
         "greenhouse_id": GREENHOUSE_ID,
         "data": {
             "temperature": round(20 + random.uniform(-3, 5), 2),
             "humidity": round(60 + random.uniform(-5, 10), 2),
             "soil_moisture": round(45 + random.uniform(-5, 5), 2),
+            "soil_temperature": round(19 + random.uniform(-2, 4), 2),
+            "soil_ec": random.randint(300, 900),
+            "soil_nitrogen": random.randint(20, 80),
+            "soil_phosphorus": random.randint(15, 60),
+            "soil_potassium": random.randint(30, 100),
+            "sample_count": 10,
             "light_intensity": random.randint(800, 2000),
             "co2": 400 + random.randint(-30, 50),
             "co2_level": 400 + random.randint(-30, 50),
@@ -81,7 +89,8 @@ def send_telemetry():
     pos = r["position"]
     print(f"📤 遥测 → {topic}")
     print(f"🌡 温度:{d['temperature']}°C | 💧湿度:{d['humidity']}% | 🌱土壤:{d['soil_moisture']}%")
-    print(f"☀️光照:{d['light_intensity']} | 🫧CO2:{d['co2']} | 🧪pH:{d['ph']}")
+    print(f"🌡土温:{d['soil_temperature']}°C | EC:{d['soil_ec']} | pH:{d['ph']}")
+    print(f"N/P/K:{d['soil_nitrogen']}/{d['soil_phosphorus']}/{d['soil_potassium']} mg/kg")
     print(f"🔋电池:{r['battery']}% | 📍位置:({pos['x']}, {pos['y']})\n")
 
 # ---------------------- 发送心跳（每60秒） ----------------------

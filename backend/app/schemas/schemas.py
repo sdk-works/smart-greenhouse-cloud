@@ -114,6 +114,14 @@ class TelemetryResponse(BaseModel):
     temperature:     Optional[float] = None
     humidity:        Optional[float] = None
     soil_moisture:   Optional[float] = None
+    soil_temperature:Optional[float] = None
+    soil_ec:         Optional[float] = None
+    ph_value:        Optional[float] = None
+    soil_nitrogen:   Optional[float] = None
+    soil_phosphorus: Optional[float] = None
+    soil_potassium:  Optional[float] = None
+    sample_count:    Optional[int]   = None
+    task_id:         Optional[str]   = None
     light_intensity: Optional[float] = None
     co2_level:       Optional[float] = None
     battery_level:   Optional[float] = None

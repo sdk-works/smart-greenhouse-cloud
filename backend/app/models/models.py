@@ -135,8 +135,12 @@ class Telemetry(Base):
     data_type       = Column(String(50))   # telemetry/heartbeat/state/image
     # 环境数据
     temperature     = Column(Float); humidity      = Column(Float)
-    soil_moisture   = Column(Float); light_intensity = Column(Float)
-    co2_level       = Column(Float); ph_value      = Column(Float)
+    soil_moisture   = Column(Float); soil_temperature = Column(Float)
+    soil_ec         = Column(Float); ph_value      = Column(Float)
+    soil_nitrogen   = Column(Float); soil_phosphorus = Column(Float)
+    soil_potassium  = Column(Float); sample_count  = Column(Integer)
+    light_intensity = Column(Float); co2_level     = Column(Float)
+    task_id         = Column(String(100), nullable=True, index=True)
     # 机器人状态
     battery_level   = Column(Float); position_x   = Column(Float); position_y = Column(Float)
     robot_status    = Column(JSON)
