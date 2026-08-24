@@ -1,0 +1,18 @@
+[Unit]
+Description=Smart Greenhouse Backend
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/greenhouse
+Environment=PATH=/opt/greenhouse/venv/bin
+EnvironmentFile=-/opt/greenhouse/.env
+ExecStart=/opt/greenhouse/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --loop asyncio
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
