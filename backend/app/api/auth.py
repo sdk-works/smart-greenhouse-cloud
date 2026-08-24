@@ -18,7 +18,7 @@ from app.core.redis import get_redis
 router = APIRouter()
 
 TOKEN_TTL_SECONDS = 8 * 60 * 60
-password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+password_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
 # ── 权限矩阵 ─────────────────────────────────────────────────
@@ -46,7 +46,7 @@ def _hash_password(pwd: str) -> str:
 
 
 def _verify_password(pwd: str, stored_hash: str) -> bool:
-    if stored_hash.startswith("$2"):
+    if stored_hash.startswith("$pbkdf2-sha256$"):
         return password_context.verify(pwd, stored_hash)
     legacy = hashlib.sha256(f"sgp-v9-salt:{pwd}".encode()).hexdigest()
     return secrets.compare_digest(legacy, stored_hash)
@@ -119,7 +119,7 @@ async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="账号已禁用")
 
-    if not user.password_hash.startswith("$2"):
+    if not user.password_hash.startswith("$pbkdf2-sha256$"):
         user.password_hash = _hash_password(payload.password)
     token = await _gen_token(user.id)
     user.last_login = datetime.now(timezone.utc)
