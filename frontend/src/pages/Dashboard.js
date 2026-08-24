@@ -89,10 +89,14 @@ export default function Dashboard() {
     const t = setInterval(loadStats, 30000);
     wsRef.current = createWebSocket(data => {
       if (data.data) {
-        setLiveEnv(data.data);
+        const normalized = {
+          ...data.data,
+          ph_value: data.data.ph_value ?? data.data.ph,
+        };
+        setLiveEnv(normalized);
         setHistory(prev => [
           ...prev,
-          { ...data.data, time: formatUTCtoLocal(data.timestamp, 'time') },
+          { ...normalized, time: formatUTCtoLocal(data.timestamp, 'time') },
         ].slice(-50));
       }
       if (data.type !== 'heartbeat') loadStats();

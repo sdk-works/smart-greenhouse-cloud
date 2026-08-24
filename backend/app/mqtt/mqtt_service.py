@@ -13,7 +13,7 @@ import asyncio, json, logging
 from datetime import datetime, timezone
 from typing import Optional, Set
 import aiomqtt
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.redis import CacheService, get_redis
@@ -143,21 +143,27 @@ class MQTTService:
             if msg_id in self._seen_msg_ids:
                 logger.debug(f"[MQTT-V9] 重复消息 msg_id={msg_id}，已跳过")
                 return
-            self._seen_msg_ids.add(msg_id)
-            if len(self._seen_msg_ids) > 10000:
-                self._seen_msg_ids = set(list(self._seen_msg_ids)[-5000:])
-
         msg_type = payload.get("type", "telemetry")
         logger.debug(f"[MQTT-V9] 收到 robot={robot_id} type={msg_type}")
 
         try:
-            if   msg_type == "telemetry":  await self._handle_telemetry(robot_id, payload)
+            handled = True
+            if   msg_type == "telemetry":  handled = await self._handle_telemetry(robot_id, payload)
             elif msg_type == "heartbeat":  await self._handle_heartbeat(robot_id, payload)
             elif msg_type == "state":      await self._handle_state(robot_id, payload)
             elif msg_type == "config_ack": await self._handle_config_ack(robot_id, payload)
             elif msg_type == "image":      await self._handle_image_notify(robot_id, payload)
+            else: handled = False
+            if not handled:
+                return
         except Exception as e:
             logger.error(f"[MQTT-V9] 处理异常 type={msg_type}: {e}", exc_info=True)
+            return
+
+        if msg_id:
+            self._seen_msg_ids.add(msg_id)
+            if len(self._seen_msg_ids) > 10000:
+                self._seen_msg_ids = set(list(self._seen_msg_ids)[-5000:])
 
         # ======================
         # 十大规范：直接写入数据库（最稳定）
@@ -166,12 +172,12 @@ class MQTTService:
             async with AsyncSessionLocal() as db:
                 raw_json = json.dumps(payload, ensure_ascii=False)
                 await db.execute(
-                    """
+                    text("""
                     INSERT INTO event_standard_log 
                     (event_no, event_type, event_source, raw_content, create_time)
                     VALUES 
                     (gen_random_uuid(), :type, :source, :raw, NOW())
-                    """,
+                    """),
                     {
                         "type": f"MQTT_{msg_type.upper()}",
                         "source": topic,
@@ -202,10 +208,18 @@ class MQTTService:
 
     async def _handle_telemetry(self, robot_id: str, payload: dict):
         async with AsyncSessionLocal() as db:
+            msg_id = payload.get("msg_id")
+            if msg_id:
+                duplicate = await db.execute(
+                    select(Telemetry.id).where(Telemetry.msg_id == msg_id).limit(1)
+                )
+                if duplicate.scalar_one_or_none():
+                    logger.info(f"[MQTT-V9] 重复消息 msg_id={msg_id}，数据库已存在")
+                    return False
             result = await db.execute(select(Device).where(Device.device_id == robot_id))
             device = result.scalar_one_or_none()
             if not device:
-                logger.warning(f"[MQTT-V9] 未注册设备 {robot_id}"); return
+                logger.warning(f"[MQTT-V9] 未注册设备 {robot_id}"); return False
 
             device.status    = DeviceStatus.ONLINE
             device.last_seen = datetime.now(timezone.utc)
@@ -256,6 +270,7 @@ class MQTTService:
             + (f" {pm['chassis_point']}→{pm['greenhouse_point']}" if pm else "")
             + f" T={data.get('temperature')}°C"
         )
+        return True
 
     async def _handle_heartbeat(self, robot_id: str, payload: dict):
         async with AsyncSessionLocal() as db:

@@ -9,14 +9,16 @@ from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+from passlib.context import CryptContext
 
 from app.core.database import get_db
 from app.models.models import User, UserRole, AuditLog
+from app.core.redis import get_redis
 
 router = APIRouter()
 
-# 简易 token 存储（生产应用 Redis）
-_tokens: dict = {}
+TOKEN_TTL_SECONDS = 8 * 60 * 60
+password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ── 权限矩阵 ─────────────────────────────────────────────────
@@ -40,12 +42,20 @@ PERMISSIONS = {
 
 
 def _hash_password(pwd: str) -> str:
-    return hashlib.sha256(f"sgp-v9-salt:{pwd}".encode()).hexdigest()
+    return password_context.hash(pwd)
 
 
-def _gen_token(user_id: str) -> str:
+def _verify_password(pwd: str, stored_hash: str) -> bool:
+    if stored_hash.startswith("$2"):
+        return password_context.verify(pwd, stored_hash)
+    legacy = hashlib.sha256(f"sgp-v9-salt:{pwd}".encode()).hexdigest()
+    return secrets.compare_digest(legacy, stored_hash)
+
+
+async def _gen_token(user_id: str) -> str:
     token = secrets.token_urlsafe(32)
-    _tokens[token] = {"user_id": user_id, "created": datetime.now(timezone.utc)}
+    redis = await get_redis()
+    await redis.set(f"auth:token:{token}", user_id, ex=TOKEN_TTL_SECONDS)
     return token
 
 
@@ -56,10 +66,12 @@ async def get_current_user(
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="请先登录")
     token = authorization.split(" ", 1)[1]
-    info = _tokens.get(token)
-    if not info:
+    redis = await get_redis()
+    user_id = await redis.get(f"auth:token:{token}")
+    if not user_id:
         raise HTTPException(status_code=401, detail="Token 无效或已过期")
-    user = await db.get(User, info["user_id"])
+    await redis.expire(f"auth:token:{token}", TOKEN_TTL_SECONDS)
+    user = await db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="用户不存在或已禁用")
     return user
@@ -102,12 +114,14 @@ class UserOut(BaseModel):
 async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)):
     r = await db.execute(select(User).where(User.username == payload.username))
     user = r.scalar_one_or_none()
-    if not user or user.password_hash != _hash_password(payload.password):
+    if not user or not _verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="账号已禁用")
 
-    token = _gen_token(user.id)
+    if not user.password_hash.startswith("$2"):
+        user.password_hash = _hash_password(payload.password)
+    token = await _gen_token(user.id)
     user.last_login = datetime.now(timezone.utc)
     await db.commit()
     return {
@@ -123,7 +137,8 @@ async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)):
 async def logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ", 1)[1]
-        _tokens.pop(token, None)
+        redis = await get_redis()
+        await redis.delete(f"auth:token:{token}")
     return {"success": True}
 
 

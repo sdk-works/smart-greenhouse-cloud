@@ -29,6 +29,10 @@ api.interceptors.response.use(
   r => r,
   err => {
     console.error('API Error:', err.response?.data?.detail || err.message);
+    if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
+      localStorage.removeItem('token');
+      if (window.location.pathname !== '/login') window.location.replace('/login');
+    }
     return Promise.reject(err);
   }
 );
@@ -144,14 +148,17 @@ export const authApi = {
 };
 
 // WebSocket
-export function createWebSocket(onMessage) {
+export function createWebSocket(onMessage, onStatus = () => {}) {
   const host = window.location.host;
-  const wsUrl = `ws://${host}/api/v1/ws/realtime`;
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${protocol}://${host}/api/v1/ws/realtime`;
   let ws, reconnectTimer, pingTimer;
+  let manuallyClosed = false;
 
   function connect() {
     ws = new WebSocket(wsUrl);
     ws.onopen = () => {
+      onStatus('connected');
       console.log('[WS] 已连接');
       pingTimer = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send('ping');
@@ -164,8 +171,9 @@ export function createWebSocket(onMessage) {
       } catch {}
     };
     ws.onclose = () => {
+      onStatus('connecting');
       clearInterval(pingTimer);
-      reconnectTimer = setTimeout(connect, 3000);
+      if (!manuallyClosed) reconnectTimer = setTimeout(connect, 3000);
     };
     ws.onerror = () => ws.close();
   }
@@ -173,6 +181,7 @@ export function createWebSocket(onMessage) {
   connect();
   return {
     close: () => {
+      manuallyClosed = true;
       clearTimeout(reconnectTimer);
       clearInterval(pingTimer);
       ws?.close();

@@ -85,7 +85,7 @@ function TopBar({ alerts, onClearAlerts, wsStatus }) {
       <div style={{ display:'flex', alignItems:'center', gap:16 }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color: wsStatus==='connected'?C.tealDk:'#999' }}>
           <div style={{ width:6, height:6, borderRadius:'50%', background:wsStatus==='connected'?C.teal:'#ccc' }} />
-          {wsStatus==='connected' ? 'MQTT 已连接' : '连接中...'}
+          {wsStatus==='connected' ? '实时通道已连接' : '实时通道连接中...'}
         </div>
 
         <Link to="/landing" style={{ display:'flex', alignItems:'center', gap:4, color:C.tealDk, textDecoration:'none', fontSize:12 }}>
@@ -128,9 +128,8 @@ function MainLayout() {
 
   useEffect(() => {
     wsRef.current = createWebSocket(msg => {
-      setWsStatus('connected');
       if (msg.type === 'alert') setAlerts(prev => [...prev, msg].slice(-8));
-    });
+    }, setWsStatus);
     return () => wsRef.current?.close();
   }, []);
 
@@ -167,11 +166,6 @@ function MainLayout() {
 
 // ── 入口 ───────────────────────────────────────────────
 export default function App() {
-  // 每次打开自动清除token，强制登录
-  useEffect(() => {
-    localStorage.removeItem("token");
-  }, []);
-
   return (
     <ConfigProvider theme={{token:{colorPrimary:'#00D9A5',colorSuccess:'#00D9A5',borderRadius:8}}}>
       <BrowserRouter>
