@@ -44,10 +44,12 @@ const CHARTS = [
 ];
 
 export default function DataCenter() {
+  const mobile = window.innerWidth <= 768;
   const [telemetry,   setTelemetry]   = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [selectedGh,  setSelectedGh]  = useState(null);
   const [hours,       setHours]       = useState(24);
+  const [selectedPoint, setSelectedPoint] = useState('all');
   const [loading,     setLoading]     = useState(false);
 
   useEffect(() => {
@@ -61,10 +63,14 @@ export default function DataCenter() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await telemetryApi.list({ greenhouse_id:selectedGh, hours, limit:200 });
+      const r = await telemetryApi.list({ greenhouse_id:selectedGh, hours, limit:2000 });
       setTelemetry([...r.data].reverse());
     } finally { setLoading(false); }
   };
+
+  const pointOptions = [...new Set(telemetry.map(t => t.chassis_point).filter(Boolean))];
+  const displayedTelemetry = selectedPoint === 'all'
+    ? telemetry : telemetry.filter(t => t.chassis_point === selectedPoint);
 
   // 清新折线图配置
   const makeChart = (metric, label, color, unit, max) => ({
@@ -76,7 +82,7 @@ export default function DataCenter() {
       textStyle: { color: C.text, fontSize: 12 },
       formatter: params => {
         if (!params[0]) return '';
-        const ts = telemetry[params[0].dataIndex]?.timestamp;
+        const ts = displayedTelemetry[params[0].dataIndex]?.timestamp;
         return `${ts ? formatUTCtoLocal(ts, 'short') : ''}<br/>
                 <span style="color:${color}">●</span> ${label}: <b>${params[0].value}${unit}</b>`;
       },
@@ -84,7 +90,7 @@ export default function DataCenter() {
     grid: { left:44, right:12, top:16, bottom:44 },
     xAxis: {
       type: 'category',
-      data: telemetry.map(t => formatUTCtoLocal(t.timestamp, 'short')),
+      data: displayedTelemetry.map(t => formatUTCtoLocal(t.timestamp, 'short')),
       axisLabel: { color:C.muted, fontSize:10, rotate:25 },
       axisLine:  { lineStyle: { color:'rgba(0,0,0,0.06)' } },
       splitLine: { show:false },
@@ -97,7 +103,7 @@ export default function DataCenter() {
     },
     series: [{
       type: 'line', smooth: true, symbol: 'none',
-      data: telemetry.map(t => t[metric] != null ? +t[metric].toFixed(2) : null),
+      data: displayedTelemetry.map(t => t[metric] != null ? +t[metric].toFixed(2) : null),
       itemStyle: { color },
       lineStyle: { width:2 },
       areaStyle: { color: { type:'linear', x:0, y:0, x2:0, y2:1, colorStops:[{ offset:0, color:color+'44' },{ offset:1, color:color+'00' }] } },
@@ -108,18 +114,22 @@ export default function DataCenter() {
   return (
     <div className="fade-in">
       {/* 顶部 */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:16 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:3, height:18, background:C.teal, borderRadius:2 }} />
           <span style={{ color:C.text, fontSize:15, fontWeight:700 }}>数据中心</span>
-          <span style={{ fontSize:12, color:C.muted }}>（{telemetry.length} 条记录）</span>
+          <span style={{ fontSize:12, color:C.muted }}>（{displayedTelemetry.length} 条记录）</span>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8, width:mobile?'100%':'auto' }}>
           <Select value={selectedGh} onChange={setSelectedGh} style={{ width:160 }} placeholder="选择大棚">
             {greenhouses.map(g => <Select.Option key={g.id} value={g.id}>{g.name}</Select.Option>)}
           </Select>
+          <Select value={selectedPoint} onChange={setSelectedPoint} style={{ width:130 }}>
+            <Select.Option value="all">全部点位（汇总）</Select.Option>
+            {pointOptions.map(p => <Select.Option key={p} value={p}>导航点 {p}</Select.Option>)}
+          </Select>
           <Select value={hours} onChange={setHours} style={{ width:100 }}>
-            {[1,6,12,24,48,168].map(h => <Select.Option key={h} value={h}>{h<24?`${h}小时`:`${h/24}天`}</Select.Option>)}
+            {[24,168,720,2160].map(h => <Select.Option key={h} value={h}>{h<24?`${h}小时`:`${h/24}天`}</Select.Option>)}
           </Select>
           <Button icon={<ReloadOutlined />} onClick={load} style={{ borderColor:C.border, color:C.muted }}>刷新</Button>
         </div>
@@ -132,10 +142,10 @@ export default function DataCenter() {
             key:'charts', label:'📈 趋势图表',
             children: (
               <Spin spinning={loading}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:12 }}>
+                <div style={{ display:'grid', gridTemplateColumns:mobile?'1fr':'1fr 1fr', gap:12, marginTop:12 }}>
                   {CHARTS.map(c => (
                     <GlassCard key={c.metric} title={c.label} icon={<span style={{ color:c.color, fontSize:13 }}>●</span>}>
-                      {telemetry.length > 0 ? (
+                      {displayedTelemetry.length > 0 ? (
                         <ReactECharts option={makeChart(c.metric,c.label,c.color,c.unit,c.max)} style={{ height:180 }} />
                       ) : (
                         <div style={{ height:180, display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:12 }}>
@@ -149,7 +159,7 @@ export default function DataCenter() {
             ),
           },
           {
-            key:'table', label:`📋 原始数据（${telemetry.length}条）`,
+            key:'table', label:`📋 原始数据（${displayedTelemetry.length}条）`,
             children: (
               <div style={{ marginTop:12, borderRadius:12, overflow:'hidden', border:`1px solid ${C.border}`, background:'rgba(255,255,255,0.68)', backdropFilter:'blur(14px)' }}>
                 <div style={{ overflowX:'auto' }}>
@@ -162,7 +172,7 @@ export default function DataCenter() {
                       </tr>
                     </thead>
                     <tbody>
-                      {telemetry.slice(0,100).map((t,i) => (
+                      {displayedTelemetry.slice(0,100).map((t,i) => (
                         <tr key={t.id} style={{ borderBottom:'1px solid rgba(0,0,0,0.03)', background: i%2===0 ? 'transparent' : 'rgba(0,217,165,0.02)' }}>
                           <td style={{ padding:'7px 12px', color:C.muted, whiteSpace:'nowrap' }}>{formatUTCtoLocal(t.timestamp)}</td>
                           <td style={{ padding:'7px 12px', color:C.muted, whiteSpace:'nowrap' }}>{t.task_id ?? '—'}</td>
@@ -181,7 +191,7 @@ export default function DataCenter() {
                           <td style={{ padding:'7px 12px', color:C.tealDk, fontWeight:600 }}>{t.battery_level?.toFixed(0) ?? '—'}</td>
                         </tr>
                       ))}
-                      {telemetry.length === 0 && (
+                      {displayedTelemetry.length === 0 && (
                         <tr><td colSpan={15} style={{ textAlign:'center', padding:40, color:C.muted }}>
                           <div style={{ fontSize:28, marginBottom:8 }}>📊</div>暂无数据，请选择大棚并等待设备上报
                         </td></tr>

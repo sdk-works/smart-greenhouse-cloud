@@ -45,6 +45,14 @@ class UserRole(str, enum.Enum):
 class MappingSyncStatus(str, enum.Enum):
     PENDING = "pending"; SYNCED = "synced"; FAILED = "failed"
 
+class ControlMode(str, enum.Enum):
+    MANUAL = "manual"; AUTO = "auto"; MAINTENANCE = "maintenance"
+
+class CommandStatus(str, enum.Enum):
+    PENDING = "pending"; SENT = "sent"; ACCEPTED = "accepted"
+    EXECUTING = "executing"; EXECUTED = "executed"; REJECTED = "rejected"
+    TIMEOUT = "timeout"; FAILED = "failed"; CANCELLED = "cancelled"
+
 
 # ── 用户 & 权限 ───────────────────────────────────────────────
 class User(Base):
@@ -122,6 +130,73 @@ class Device(Base):
     logs        = relationship("DeviceLog", back_populates="device")
     tasks       = relationship("RobotTask", back_populates="device")
     deployments = relationship("Deployment", back_populates="device")
+    control_profile = relationship("ActuatorProfile", back_populates="device", uselist=False)
+    actuator_commands = relationship("ActuatorCommand", back_populates="device")
+
+
+class ActuatorProfile(Base):
+    """风机/水阀运行状态与安全边界。"""
+    __tablename__ = "actuator_profiles"
+    device_id       = Column(String(36), ForeignKey("devices.id"), primary_key=True)
+    zone_id         = Column(String(100), nullable=True, index=True)
+    control_mode    = Column(SAEnum(ControlMode), default=ControlMode.MANUAL, nullable=False)
+    desired_state   = Column(JSON, default={})
+    actual_state    = Column(JSON, default={})
+    safety_limits   = Column(JSON, default={})
+    emergency_stop  = Column(Boolean, default=False, nullable=False)
+    maintenance_lock= Column(Boolean, default=False, nullable=False)
+    last_command_id = Column(String(100), nullable=True)
+    state_updated_at= Column(DateTime(timezone=True))
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+    device          = relationship("Device", back_populates="control_profile")
+
+
+class ActuatorCommand(Base):
+    """先落库、后发送、等待设备回执的可审计命令。"""
+    __tablename__ = "actuator_commands"
+    id             = Column(String(36), primary_key=True, default=gen_uuid)
+    command_id     = Column(String(100), unique=True, nullable=False, index=True)
+    device_id      = Column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    greenhouse_id  = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)
+    action          = Column(String(50), nullable=False)
+    params          = Column(JSON, default={})
+    source          = Column(String(30), default="manual", nullable=False)
+    reason          = Column(Text)
+    status          = Column(SAEnum(CommandStatus), default=CommandStatus.PENDING, nullable=False, index=True)
+    desired_state   = Column(JSON, default={})
+    actual_state    = Column(JSON, default={})
+    issued_by       = Column(String(36), ForeignKey("users.id"), nullable=True)
+    issued_at       = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at      = Column(DateTime(timezone=True), nullable=False)
+    accepted_at     = Column(DateTime(timezone=True))
+    completed_at    = Column(DateTime(timezone=True))
+    error_message   = Column(Text)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+    device          = relationship("Device", back_populates="actuator_commands")
+
+
+class ControlRule(Base):
+    """自动控制规则配置；V1 只保存与校验，不自动执行。"""
+    __tablename__ = "control_rules"
+    id             = Column(String(36), primary_key=True, default=gen_uuid)
+    name           = Column(String(200), nullable=False)
+    greenhouse_id  = Column(String(36), ForeignKey("greenhouses.id"), nullable=False, index=True)
+    device_id      = Column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    enabled        = Column(Boolean, default=False, nullable=False)
+    metric         = Column(String(50), nullable=False)
+    start_operator = Column(String(5), nullable=False)
+    start_threshold= Column(Float, nullable=False)
+    stop_threshold = Column(Float, nullable=False)
+    duration_seconds=Column(Integer, default=60, nullable=False)
+    cooldown_seconds=Column(Integer, default=300, nullable=False)
+    priority       = Column(Integer, default=5, nullable=False)
+    action         = Column(String(50), nullable=False)
+    action_params  = Column(JSON, default={})
+    created_by     = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at     = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 # ── 遥测 ──────────────────────────────────────────────────────
@@ -254,3 +329,105 @@ class PointMapping(Base):
 
     deployment  = relationship("Deployment",  back_populates="point_mappings")
     greenhouse  = relationship("Greenhouse")
+
+
+class NavPointDiscovery(Base):
+    __tablename__ = "nav_point_discoveries"
+    __table_args__ = (UniqueConstraint("robot_id", "nav_point_code", name="uq_nav_point_discovery"),)
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id = Column(String(100), nullable=False, index=True)
+    nav_point_code = Column(String(64), nullable=False)
+    first_seen_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False)
+    seen_count = Column(Integer, nullable=False, default=1)
+    status = Column(String(20), nullable=False, default="unassigned")
+    raw_data = Column(JSON)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class RobotPointConfig(Base):
+    __tablename__ = "robot_point_configs"
+    __table_args__ = (UniqueConstraint("robot_id", "nav_point_code", name="uq_robot_point_config"),)
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id = Column(String(100), nullable=False, index=True)
+    nav_point_code = Column(String(64), nullable=False)
+    greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=False)
+    point_name = Column(String(100), nullable=False)
+    sample_seconds = Column(Integer, nullable=False, default=10)
+    collect_soil = Column(Boolean, nullable=False, default=True)
+    collect_environment = Column(Boolean, nullable=False, default=True)
+    take_photo = Column(Boolean, nullable=False, default=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    greenhouse = relationship("Greenhouse")
+
+
+class RobotPointConfigRelease(Base):
+    __tablename__ = "robot_point_config_releases"
+    __table_args__ = (UniqueConstraint("robot_id", "config_version", name="uq_robot_point_release"),)
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id = Column(String(100), nullable=False, index=True)
+    config_version = Column(Integer, nullable=False)
+    mode = Column(String(20), nullable=False)
+    config_sha256 = Column(String(64), nullable=False)
+    payload = Column(JSON, nullable=False)
+    sync_status = Column(String(20), nullable=False, default="pending")
+    sync_detail = Column(JSON)
+    published_at = Column(DateTime(timezone=True), server_default=func.now())
+    applied_at = Column(DateTime(timezone=True))
+
+
+class InspectionBatch(Base):
+    """A cloud-side grouping inferred from arrival/telemetry events.
+
+    It deliberately does not claim control of, or knowledge about, the vendor
+    navigation route.  A route label can be added later by an operator.
+    """
+    __tablename__ = "inspection_batches"
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id = Column(String(100), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="running", index=True)
+    source = Column(String(30), nullable=False, default="auto_event")
+    navigation_route_label = Column(String(200), nullable=True)
+    route_identification = Column(String(30), nullable=False, default="unknown")
+    config_version = Column(Integer, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    last_event_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    close_reason = Column(String(100), nullable=True)
+    summary = Column(JSON, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    visits = relationship("InspectionVisit", back_populates="batch",
+                          cascade="all, delete-orphan")
+
+
+class InspectionVisit(Base):
+    """One independently useful physical-point visit within a batch."""
+    __tablename__ = "inspection_visits"
+    __table_args__ = (
+        UniqueConstraint("robot_id", "event_id", name="uq_inspection_visit_event"),
+    )
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    batch_id = Column(String(36), ForeignKey("inspection_batches.id"),
+                      nullable=False, index=True)
+    robot_id = Column(String(100), nullable=False, index=True)
+    event_id = Column(String(100), nullable=False)
+    task_id = Column(String(100), nullable=True, index=True)
+    nav_point_code = Column(String(64), nullable=False, index=True)
+    greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=True)
+    point_name = Column(String(100), nullable=True)
+    mapping_id = Column(String(36), nullable=True)
+    config_version = Column(Integer, nullable=True)
+    status = Column(String(30), nullable=False, default="arrived")
+    arrived_at = Column(DateTime(timezone=True), nullable=False)
+    sampled_at = Column(DateTime(timezone=True), nullable=True)
+    telemetry_id = Column(String(36), ForeignKey("telemetry.id"), nullable=True)
+    error_code = Column(String(100), nullable=True)
+    raw_event = Column(JSON)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    batch = relationship("InspectionBatch", back_populates="visits")

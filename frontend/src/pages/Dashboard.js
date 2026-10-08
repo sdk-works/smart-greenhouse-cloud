@@ -138,6 +138,7 @@ export default function Dashboard() {
         temperature:   t.temperature || 0,
         humidity:      t.humidity || 0,
         co2_level:     t.co2_level || 0,
+        light_intensity: t.light_intensity,
         soil_moisture: t.soil_moisture || 0,
         soil_temperature: t.soil_temperature,
         soil_ec: t.soil_ec,
@@ -248,6 +249,7 @@ export default function Dashboard() {
     { label: '磷',       val: liveEnv?.soil_phosphorus,  unit: ' mg/kg', color:'#FFA726', max:500 },
     { label: '钾',       val: liveEnv?.soil_potassium,   unit: ' mg/kg', color:'#66BB6A', max:500 },
     { label: 'CO₂',     val: liveEnv?.co2_level,       unit: 'ppm', color: C.purple,  max: 1500 },
+    { label: '光照强度', val: liveEnv?.light_intensity, unit: ' lux', color: C.yellow, max: 100000 },
   ];
 
   return (

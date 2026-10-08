@@ -6,6 +6,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { dashboardApi, telemetryApi } from '../services/api';
 
 // ── 设计常量 ──────────────────────────────────────────────────
 const C = {
@@ -308,10 +309,13 @@ function GreenhouseMapView({ robotPos, path }) {
 // ── 主页面 ─────────────────────────────────────────────────────
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [mobile, setMobile] = useState(() => window.innerWidth <= 768);
   const [time, setTime] = useState(new Date());
   const [robotPos, setRobotPos] = useState([8, 10]);
   const [path, setPath] = useState([[8, 10]]);
-  const [env, setEnv] = useState({ temp:24.5, hum:72.3, co2:420, soil:45.2, light:18500 });
+  const [env, setEnv] = useState({ temp:0, hum:0, co2:0, soil:0, light:0 });
+  const [platform, setPlatform] = useState({});
+  const [robot, setRobot] = useState({ online:false, battery:null, status:'等待数据', speed:null, position:false });
 
   const WAYPOINTS = [
     [8,10],[25,10],[42,10],[60,10],[78,10],[92,10],
@@ -321,10 +325,12 @@ export default function LandingPage() {
   const wpIdx = useRef(0);
 
   useEffect(() => {
+    const onResize = () => setMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
     const style = document.createElement('style');
     style.innerHTML = globalStyles;
     document.head.appendChild(style);
-    return () => document.head.removeChild(style);
+    return () => { window.removeEventListener('resize', onResize); document.head.removeChild(style); };
   }, []);
 
   useEffect(() => {
@@ -333,40 +339,47 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const moveId = setInterval(() => {
-      wpIdx.current = (wpIdx.current + 1) % WAYPOINTS.length;
-      const target = WAYPOINTS[wpIdx.current];
-      setRobotPos(target);
-      setPath(prev => [...prev.slice(-40), target]);
-    }, 700);
-    const envId = setInterval(() => {
-      setEnv(d => ({
-        temp:  +(d.temp  + (Math.random() - 0.5) * 0.4).toFixed(1),
-        hum:   +(Math.min(99, Math.max(30, d.hum   + (Math.random() - 0.5) * 1))).toFixed(1),
-        co2:   +(Math.max(300, d.co2   + (Math.random() - 0.5) * 15)).toFixed(0),
-        soil:  +(Math.min(95, Math.max(10, d.soil  + (Math.random() - 0.5) * 0.5))).toFixed(1),
-        light: +(Math.max(0, d.light + (Math.random() - 0.5) * 300)).toFixed(0),
-      }));
-    }, 2500);
-    return () => { clearInterval(moveId); clearInterval(envId); };
+    const load = async () => {
+      const [statsResult, latestResult] = await Promise.all([
+        dashboardApi.stats().catch(() => ({data:{}})),
+        telemetryApi.latest('ROB001').catch(() => ({data:{}})),
+      ]);
+      const s = statsResult.data || {}, t = latestResult.data || {};
+      setPlatform(s);
+      setEnv({ temp:Number(t.temperature ?? 0), hum:Number(t.humidity ?? 0),
+        co2:Number(t.co2_level ?? 0), soil:Number(t.soil_moisture ?? 0),
+        light:Number(t.light_intensity ?? 0) });
+      const hasPosition = Number.isFinite(t.position_x) && Number.isFinite(t.position_y);
+      if (hasPosition) {
+        const next = [Number(t.position_x), Number(t.position_y)];
+        setRobotPos(next); setPath(prev => [...prev.slice(-40), next]);
+      }
+      setRobot({ online:Number(s.online_devices || 0) > 0,
+        battery:Number.isFinite(t.battery_level) ? Number(t.battery_level) : null,
+        status:t.robot_status?.state || t.robot_status?.status || (Number(s.online_devices || 0)>0?'在线':'离线'),
+        speed:Number.isFinite(t.robot_status?.speed) ? Number(t.robot_status.speed) : null,
+        position:hasPosition });
+    };
+    load(); const timer = setInterval(load, 30000);
+    return () => clearInterval(timer);
   }, []);
 
   const stats = [
-    { label:'温室大棚', value:12, unit:'个', icon:'🏠', color:C.teal    },
-    { label:'在线机器人', value:3, unit:'台', icon:'🤖', color:C.sky     },
-    { label:'今日巡检', value:47, unit:'次', icon:'🔍', color:C.yellow   },
-    { label:'图片采集', value:284,unit:'张', icon:'📷', color:C.orange  },
-    { label:'异常告警', value:2,  unit:'条', icon:'⚠️', color:'#FF8A65' },
-    { label:'健康植株', value:98, unit:'%',  icon:'🌱', color:C.green2  },
+    { label:'温室大棚', value:Number(platform.total_greenhouses||0), unit:'个', icon:'🏠', color:C.teal },
+    { label:'在线机器人', value:Number(platform.online_devices||0), unit:'台', icon:'🤖', color:C.sky },
+    { label:'进行中任务', value:Number(platform.active_tasks||0), unit:'个', icon:'🔍', color:C.yellow },
+    { label:'今日图片', value:Number(platform.today_images_count||0),unit:'张', icon:'📷', color:C.orange },
+    { label:'今日数据', value:Number(platform.today_telemetry_count||0),unit:'条', icon:'📊', color:C.green2 },
+    { label:'设备总数', value:Number(platform.total_devices||0), unit:'台', icon:'🧩', color:C.purple },
   ];
 
   return (
-    <div style={{ width:'100vw', height:'100vh', position:'relative', overflow:'hidden', fontFamily:'"PingFang SC","Source Han Sans CN","Microsoft YaHei",sans-serif' }}>
+    <div style={{ width:'100%', minHeight:'100dvh', height:mobile?'auto':'100vh', position:'relative', overflowX:'hidden', overflowY:mobile?'auto':'hidden', fontFamily:'"PingFang SC","Source Han Sans CN","Microsoft YaHei",sans-serif' }}>
       <GreenBackground />
 
-      <div style={{ position:'relative', zIndex:1, padding:'0 20px', maxWidth:1440, margin:'0 auto', height:'100%' }}>
+      <div style={{ position:'relative', zIndex:1, padding:mobile?'0 12px':'0 20px', maxWidth:1440, margin:'0 auto', height:mobile?'auto':'100%' }}>
         <div style={{
-          height:60, display:'flex', alignItems:'center', justifyContent:'space-between',
+          minHeight:60, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
           borderBottom:'1px solid rgba(0,217,165,0.15)',
         }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -377,16 +390,16 @@ export default function LandingPage() {
               fontSize:20, boxShadow:`0 4px 12px rgba(0,168,122,0.3)`,
             }}>🌿</div>
             <div>
-              <div style={{ fontSize:18, fontWeight:700, color:'#1a4a38', letterSpacing:1 }}>
+              <div style={{ fontSize:mobile?14:18, fontWeight:700, color:'#1a4a38', letterSpacing:1 }}>
                 智慧温室巡检机器人平台
               </div>
-              <div style={{ fontSize:10, color:'#7aaf96' }}>
+              <div style={{ display:mobile?'none':'block', fontSize:10, color:'#7aaf96' }}>
                 Smart Greenhouse Robot Platform · 农业大数据大屏 · 智慧农场可视化
               </div>
             </div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-            <div style={{ textAlign:'right' }}>
+            <div style={{ display:mobile?'none':'block', textAlign:'right' }}>
               <div style={{ fontSize:22, fontWeight:700, color:C.teal, letterSpacing:2, fontVariantNumeric:'tabular-nums' }}>
                 {time.toLocaleTimeString('zh-CN', { hour12:false })}
               </div>
@@ -397,7 +410,7 @@ export default function LandingPage() {
             <button
               onClick={() => navigate('/dashboard')}
               style={{
-                padding:'10px 24px',
+                padding:mobile?'8px 12px':'10px 24px',
                 background:`linear-gradient(135deg, ${C.teal}, #00A87A)`,
                 border:'none', borderRadius:24, cursor:'pointer',
                 fontSize:14, fontWeight:700, color:'#fff',
@@ -407,12 +420,12 @@ export default function LandingPage() {
               onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow=`0 10px 30px rgba(0,168,122,0.45)`; }}
               onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow=`0 6px 20px rgba(0,168,122,0.35)`; }}
             >
-              进入管理平台 →
+              {mobile?'管理平台':'进入管理平台 →'}
             </button>
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'240px 1fr 240px', gap:14, padding:'14px 0' }}>
+        <div style={{ display:'grid', gridTemplateColumns:mobile?'1fr':'240px 1fr 240px', gap:14, padding:'14px 0' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             <GlassPanel glow={C.teal}>
               <div style={{ padding:'12px 14px' }}>
@@ -481,20 +494,20 @@ export default function LandingPage() {
                   <SectionTitle icon="🗺️" title="温室实景 · 机器人实时追踪" />
                   <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:C.teal }}>
                     <div style={{ width:7, height:7, borderRadius:'50%', background:C.teal, animation:'breathGreen 2s infinite' }} />
-                    实时追踪
+                    {robot.online?'设备在线':'设备离线'}
                   </div>
                 </div>
                 <div style={{ width:'100%', aspectRatio:'5/2.9', borderRadius:10, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,100,70,0.1)' }}>
                   <GreenhouseMapView robotPos={robotPos} path={path} />
                 </div>
 
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8, marginTop:10 }}>
+                <div style={{ display:'grid', gridTemplateColumns:mobile?'repeat(2,1fr)':'repeat(5,1fr)', gap:8, marginTop:10 }}>
                   {[
                     { label:'编号', value:'ROB-001', color:C.teal  },
-                    { label:'状态', value:'巡检中',  color:C.green2 },
-                    { label:'电量', value:'82%',     color:C.yellow },
-                    { label:'速度', value:'0.6m/s',  color:C.sky   },
-                    { label:'位置', value:`(${robotPos[0].toFixed(0)},${robotPos[1].toFixed(0)})`, color:C.orange },
+                    { label:'状态', value:robot.status, color:robot.online?C.green2:'#999' },
+                    { label:'电量', value:robot.battery == null?'未接入':`${robot.battery.toFixed(0)}%`, color:C.yellow },
+                    { label:'速度', value:robot.speed == null?'未接入':`${robot.speed.toFixed(2)}m/s`, color:C.sky },
+                    { label:'位置', value:robot.position?`(${robotPos[0].toFixed(1)},${robotPos[1].toFixed(1)})`:'未接入', color:C.orange },
                   ].map(s => (
                     <div key={s.label} style={{
                       textAlign:'center', padding:'7px 4px',
@@ -569,7 +582,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, paddingBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:mobile?'repeat(2,1fr)':'repeat(6,1fr)', gap:10, paddingBottom:16 }}>
           {stats.map(s => (
             <GlassPanel key={s.label} style={{ padding:'12px 14px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>

@@ -103,7 +103,7 @@ export default function GreenhouseMap() {
     { label: '湿度',   value: envData.humidity      != null ? `${envData.humidity.toFixed(1)}%`      : '-', color: '#40a9ff' },
     { label: '土壤湿度', value: envData.soil_moisture != null ? `${envData.soil_moisture.toFixed(1)}%` : '-', color: '#36cfc9' },
     { label: 'CO₂',  value: envData.co2            != null ? `${envData.co2.toFixed(0)} ppm`        : '-', color: '#9254de' },
-    { label: '光照',  value: envData.light          != null ? `${envData.light.toFixed(0)} lux`      : '-', color: '#faad14' },
+    { label: '光照',  value: envData.light_intensity != null ? `${envData.light_intensity.toFixed(0)} lux` : '-', color: '#faad14' },
   ];
 
   return (

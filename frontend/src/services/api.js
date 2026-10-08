@@ -133,6 +133,22 @@ export const settingsApi = {
   getOverview: () => api.get('/settings/overview'),
 };
 
+export const pointConfigApi = {
+  discoveries: (robotId) => api.get(`/point-config/robots/${robotId}/discoveries`),
+  status: (robotId) => api.get(`/point-config/robots/${robotId}/status`),
+  assign: (robotId, code, data) => api.put(`/point-config/robots/${robotId}/points/${encodeURIComponent(code)}`, data),
+  unassign: (robotId, code) => api.delete(`/point-config/robots/${robotId}/points/${encodeURIComponent(code)}`),
+  deleteDiscovery: (robotId, code) => api.delete(`/point-config/robots/${robotId}/discoveries/${encodeURIComponent(code)}`),
+  publish: (robotId, mode) => api.post(`/point-config/robots/${robotId}/publish`, { mode }),
+  resetDiscovery: (robotId) => api.post(`/point-config/robots/${robotId}/reset-discovery`, { confirmation:'RESET' }),
+};
+
+export const inspectionBatchApi = {
+  list: (params) => api.get('/inspection-batches', { params }),
+  get: (id) => api.get(`/inspection-batches/${id}`),
+  setRouteLabel: (id, label) => api.put(`/inspection-batches/${id}/route-label`, { label }),
+};
+
 // ==============================================
 // 🔥 修复：用户管理 + 退出登录
 // ==============================================

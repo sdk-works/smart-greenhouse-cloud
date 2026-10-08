@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api import (
     greenhouses, devices, telemetry, tasks, images,
     dashboard, ws, settings_api, waypoints, robot_patrol,
-    deployments, auth,
+    deployments, auth, point_configs, inspection_batches,
 )
 
 api_router = APIRouter()
@@ -18,3 +18,5 @@ api_router.include_router(settings_api.router,prefix="/settings",    tags=["Sett
 api_router.include_router(waypoints.router,   prefix="/greenhouses", tags=["Waypoints"])
 api_router.include_router(robot_patrol.router,prefix="/devices",     tags=["Patrol"])
 api_router.include_router(deployments.router, prefix="/deployments", tags=["Deployments 巡检方案"])
+api_router.include_router(point_configs.router, prefix="/point-config", tags=["Navigation point configuration"])
+api_router.include_router(inspection_batches.router, prefix="/inspection-batches", tags=["Automatic inspection batches"])
