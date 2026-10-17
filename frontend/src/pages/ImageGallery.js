@@ -1,0 +1,48 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {Alert,Button,Card,Checkbox,DatePicker,Descriptions,Drawer,Empty,Image,Input,Modal,Pagination,Popconfirm,Select,Space,Spin,Tabs,Tag,Upload,message} from 'antd';
+import api,{deviceApi,greenhouseApi,imageApi,formatUTCtoLocal as time} from '../services/api';
+const initial={greenhouse_id:undefined,point_id:undefined,device_id:undefined,classification:'all',order:'newest'};
+const dateLabel=x=>new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(x.captured_at||x.created_at));
+export default function ImageGallery(){
+  const [filters,setFilters]=useState(initial),[dates,setDates]=useState(null),[keyword,setKeyword]=useState(''),[query,setQuery]=useState('');
+  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(24),[reload,setReload]=useState(0),[data,setData]=useState({items:[],total:0}),[loading,setLoading]=useState(false),[error,setError]=useState('');
+  const [greenhouses,setGreenhouses]=useState([]),[devices,setDevices]=useState([]),[points,setPoints]=useState([]),[detail,setDetail]=useState(null),[selected,setSelected]=useState([]),[deleting,setDeleting]=useState(false);
+  const [uploadOpen,setUploadOpen]=useState(false),[uploadDevice,setUploadDevice]=useState(null),[uploading,setUploading]=useState(false);
+  const serial=useRef(0);
+  useEffect(()=>{Promise.all([greenhouseApi.list(),deviceApi.list({device_type:'robot'}),api.get('/photo-catalog/options')]).then(([g,d,p])=>{setGreenhouses(g.data);setDevices(d.data);setPoints(p.data.points);}).catch(()=>message.error('分类选项加载失败，请刷新页面'));},[]);
+  useEffect(()=>{const t=setTimeout(()=>{setQuery(keyword.trim());setPage(1);},300);return()=>clearTimeout(t);},[keyword]);
+  useEffect(()=>{const request=++serial.current;setLoading(true);setError('');setSelected([]);
+    const params={...filters,page,page_size:pageSize,keyword:query};
+    if(dates?.[0])params.start=dates[0].startOf('day').toISOString();
+    if(dates?.[1])params.end=dates[1].add(1,'day').startOf('day').toISOString();
+    api.get('/photo-catalog',{params}).then(r=>{if(request===serial.current){setData(r.data);if(page>1&&!r.data.items.length&&r.data.total<(page-1)*pageSize+1)setPage(Math.max(1,Math.ceil(r.data.total/pageSize)));}}).catch(()=>{if(request===serial.current){setError('照片加载失败，请重试');setData({items:[],total:0});}}).finally(()=>{if(request===serial.current)setLoading(false);});
+    return()=>{serial.current++;};
+  },[filters,dates,page,pageSize,query,reload]);
+  const change=(key,value)=>{setFilters(f=>({...f,[key]:value,...(key==='greenhouse_id'?{point_id:undefined}:{})}));setPage(1);};
+  const refresh=()=>setReload(x=>x+1);
+  const remove=async ids=>{setDeleting(true);let failed=0;for(const id of ids){try{await imageApi.delete(id);}catch{failed++;}}setDeleting(false);setDetail(null);refresh();failed?message.warning(`${failed}张删除失败，请核对`):message.success('已删除所选照片');};
+  const download=async x=>{try{const r=await fetch(x.storage_url);if(!r.ok)throw Error();const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download=x.filename||'photo.jpg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{message.error('原图下载失败');}};
+  const upload=async file=>{if(!uploadDevice){message.error('请选择机器人');return false;}setUploading(true);try{await imageApi.upload(uploadDevice,file,{network_type:'wifi'});message.success('上传完成；无采集任务的照片放入待确认分类');refresh();}catch{message.error('上传失败，请检查格式、大小或网络');}finally{setUploading(false);}return false;};
+  const groups={};for(const x of data.items){const day=dateLabel(x);(groups[day]||(groups[day]=[])).push(x);}
+  return <Space direction="vertical" size={16} style={{width:'100%',minWidth:0}}>
+    <Card><Space wrap style={{width:'100%',justifyContent:'space-between'}}><div><h2 style={{margin:'0 0 6px'}}>照片档案</h2><span>按大棚、采集点和拍摄日期查找，每次巡检独立保留</span></div><Space><Button onClick={()=>setUploadOpen(true)}>手动上传</Button><Button loading={loading} onClick={refresh}>刷新</Button></Space></Space></Card>
+    <Card><Space wrap style={{width:'100%'}}>
+      <Select aria-label="照片大棚" allowClear placeholder="全部大棚" style={{width:190}} value={filters.greenhouse_id} onChange={v=>change('greenhouse_id',v)} options={greenhouses.map(g=>({value:g.id,label:g.name}))}/>
+      <Select aria-label="照片采集点" allowClear showSearch optionFilterProp="label" placeholder="全部采集点" style={{width:210}} value={filters.point_id} onChange={v=>change('point_id',v)} options={points.filter(p=>!filters.greenhouse_id||p.greenhouse_id===filters.greenhouse_id).map(p=>({value:p.id,label:`${!filters.greenhouse_id?(greenhouses.find(g=>g.id===p.greenhouse_id)?.name||'大棚')+' / ':''}${p.name}${p.enabled?'':'（停用）'}`}))}/>
+      <DatePicker.RangePicker aria-label="拍摄日期范围" value={dates} onChange={v=>{setDates(v);setPage(1);}} style={{maxWidth:'100%'}}/>
+      <Select aria-label="照片机器人" allowClear placeholder="全部机器人" style={{width:170}} value={filters.device_id} onChange={v=>change('device_id',v)} options={devices.map(d=>({value:d.id,label:d.name}))}/>
+      <Input.Search aria-label="搜索照片" allowClear placeholder="文件名 / 完整任务号 / 当时点名" value={keyword} onChange={e=>setKeyword(e.target.value)} style={{width:260,maxWidth:'100%'}}/>
+      <Select aria-label="照片排序" value={filters.order} onChange={v=>change('order',v)} options={[{value:'newest',label:'拍摄时间由新到旧'},{value:'oldest',label:'拍摄时间由旧到新'}]} style={{width:180}}/>
+      <Button onClick={()=>{setFilters(initial);setDates(null);setKeyword('');setPage(1);}}>清除筛选</Button>
+    </Space></Card>
+    <Card><Tabs activeKey={filters.classification} onChange={v=>change('classification',v)} items={[{key:'all',label:'全部照片'},{key:'linked',label:'已对应采集点'},{key:'unconfirmed',label:'待确认归属'}]}/>
+      <Alert type="info" showIcon message={filters.classification==='unconfirmed'?'这些照片缺少可确定的采集任务或点位对应，未按设备所属大棚强行分类。':'分类按同一机器人与完整采集任务对应；补传照片按拍摄时间排列。'} description="先选择大棚，再选择采集点。列表使用缩略图，点击查看时才加载原图；待确认照片可清除大棚筛选后查看。"/>
+      <Space wrap style={{margin:'16px 0'}}><Tag>符合条件 {data.total} 张</Tag><Checkbox disabled={loading||!data.items.length} checked={data.items.length>0&&selected.length===data.items.length} indeterminate={selected.length>0&&selected.length<data.items.length} onChange={e=>setSelected(e.target.checked?data.items.map(x=>x.id):[])}>选择本页</Checkbox>{selected.length>0&&<Popconfirm title={`删除选中的${selected.length}张照片？`} description="删除后无法恢复" onConfirm={()=>remove(selected)}><Button danger loading={deleting}>删除所选</Button></Popconfirm>}</Space>
+      {error&&<Alert type="error" message={error}/>}
+      <Spin spinning={loading}>{Object.entries(groups).map(([day,photos])=><section key={day}><h3>{day} <small style={{fontWeight:400,color:'#777'}}>本页{photos.length}张</small></h3><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(190px,100%),1fr))',gap:14}}>{photos.map(x=><Card key={x.id} size="small" styles={{body:{padding:10}}} cover={<button aria-label={`查看照片 ${x.id}`} onClick={()=>setDetail(x)} style={{border:0,padding:0,width:'100%',height:150,background:'#edf3ef',cursor:'pointer'}}>{x.thumbnail_url?<img loading="lazy" src={x.thumbnail_url} alt={`${x.point_name||'待确认'} ${time(x.captured_at||x.created_at)}`} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span>暂无缩略图 · 点击查看原图</span>}</button>}><Space wrap><Checkbox checked={selected.includes(x.id)} onChange={e=>setSelected(v=>e.target.checked?[...v,x.id]:v.filter(id=>id!==x.id))}/><b>{x.point_name||'未对应点位'}</b>{x.classification==='unconfirmed'&&<Tag color="orange">待确认</Tag>}</Space><div style={{marginTop:6}}>{x.greenhouse_name||'大棚归属待确认'}</div><div style={{fontSize:12,color:'#666',marginTop:6}}>{time(x.captured_at||x.created_at)}</div><div style={{fontSize:12,color:'#888',marginTop:4}}>{x.device_name} · {x.file_size?`${Math.round(x.file_size/1024)} KB`:'大小未记录'}</div></Card>)}</div></section>)}{!loading&&!data.items.length&&<Empty description="没有符合条件的照片"/>}</Spin>
+      <Pagination style={{marginTop:24}} current={page} pageSize={pageSize} total={data.total} showSizeChanger pageSizeOptions={['12','24','48']} onChange={(p,s)=>{setPage(p);setPageSize(s);}}/>
+    </Card>
+    <Drawer title="照片详情" width="min(700px,100vw)" open={!!detail} onClose={()=>setDetail(null)} extra={detail&&<Button onClick={()=>download(detail)}>下载原图</Button>}>{detail&&<><Image src={detail.storage_url} width="100%"/><Descriptions style={{marginTop:20}} column={1} items={[{key:'gh',label:'大棚',children:detail.greenhouse_name||'待确认'},{key:'point',label:'采集点',children:detail.point_name||'待确认'},{key:'device',label:'机器人',children:detail.device_name},{key:'task',label:'采集任务',children:<span style={{overflowWrap:'anywhere'}}>{detail.task_id||'未确定'}</span>},{key:'time',label:detail.capture_time_source==='server_fallback'?'记录时间（拍摄时间未知）':'拍摄时间',children:time(detail.captured_at||detail.created_at)},{key:'received',label:'上传接收时间',children:time(detail.created_at)},{key:'file',label:'文件名',children:<span style={{overflowWrap:'anywhere'}}>{detail.filename}</span>}]}/></>}</Drawer>
+    <Modal title="手动上传照片" open={uploadOpen} onCancel={()=>{if(!uploading)setUploadOpen(false);}} footer={null}><Alert type="info" message="没有对应采集任务的手动图片进入待确认分类。"/><Select aria-label="上传机器人" placeholder="选择机器人" style={{width:'100%',margin:'16px 0'}} value={uploadDevice} onChange={setUploadDevice} options={devices.map(d=>({value:d.device_id,label:d.name}))}/><Upload beforeUpload={upload} showUploadList={false} accept="image/jpeg,image/png,image/webp" disabled={!uploadDevice||uploading}><Button loading={uploading}>选择图片上传</Button></Upload></Modal>
+  </Space>;
+}
