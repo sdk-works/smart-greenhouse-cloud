@@ -354,18 +354,25 @@ class MQTTService:
         robot_id = parts[2] if len(parts) >= 3 else payload.get("device_id", "")
 
         msg_id = payload.get("msg_id")
-        if msg_id:
+        msg_type = payload.get("type", "telemetry")
+        # device 通道 telemetry 的重复/冲突检测交给 _handle_device_telemetry(事务锁+device_receipts+回ACK)
+        # 不能走 _seen_msg_ids 内存拦截，否则重复上报不会回 stored ACK（契约 v1.2 §7）
+        is_device_telemetry = topic.startswith("agri/device/") and msg_type == "telemetry"
+        if msg_id and not is_device_telemetry:
             if msg_id in self._seen_msg_ids:
                 logger.debug(f"[MQTT-V9] 重复消息 msg_id={msg_id}，已跳过")
                 return
-        msg_type = payload.get("type", "telemetry")
         logger.debug(f"[MQTT-V9] 收到 robot={robot_id} type={msg_type}")
 
         try:
             handled = True
             if topic.startswith("agri/device/") and msg_type in {"command_ack", "device_status"}:
                 handled = await self._handle_actuator_message(robot_id, payload)
-            elif msg_type == "telemetry":  handled = await self._handle_telemetry(robot_id, payload)
+            elif msg_type == "telemetry":
+                if topic.startswith("agri/device/"):
+                    handled = await self._handle_device_telemetry(robot_id, payload)
+                else:
+                    handled = await self._handle_telemetry(robot_id, payload)
             elif msg_type == "heartbeat":  await self._handle_heartbeat(robot_id, payload)
             elif msg_type == "point_arrival": handled = await self._handle_point_arrival(robot_id, payload)
             elif msg_type == "state":      await self._handle_state(robot_id, payload)
@@ -378,7 +385,7 @@ class MQTTService:
             logger.error(f"[MQTT-V9] 处理异常 type={msg_type}: {e}", exc_info=True)
             return
 
-        if msg_id:
+        if msg_id and not is_device_telemetry:
             self._seen_msg_ids.add(msg_id)
             if len(self._seen_msg_ids) > 10000:
                 self._seen_msg_ids = set(list(self._seen_msg_ids)[-5000:])
@@ -452,6 +459,110 @@ class MQTTService:
             return None
 
         return pm
+
+    async def _handle_device_telemetry(self, device_id: str, payload: dict):
+        """固定终端(agri/device/{device_id}/up)遥测：业务ACK + (device_id,msg_id)唯一去重。
+        契约 v1.2 §3/§5/§7。
+        - Topic 的 device_id 必须与 body.device_id 一致；不一致拒绝。
+        - 大棚归属由 Device 绑定决定，不信任 payload 自报 greenhouse_id。
+        - 落库成功(事务提交)后才发布 stored ACK；重复只存一条仍回 stored；同号异内容拒绝。
+        - time_quality=0 / sampled_at=0 时 sampled_at 存 NULL，不绘制成 1970。
+        """
+        topic_id = str(payload.get("device_id") or "").strip()
+        if topic_id and topic_id != device_id:
+            logger.warning(f"[DEV-ACK] Topic与body身份不一致 topic={device_id} body={topic_id}，拒绝")
+            return False
+        msg_id = payload.get("msg_id")
+        if not msg_id:
+            logger.warning(f"[DEV-ACK] 缺 msg_id device={device_id}，拒绝")
+            return False
+
+        # 内容摘要：同号异内容检测（device_receipts.digest）
+        import hashlib
+        digest = hashlib.sha256(
+            json.dumps(payload.get("data", {}), sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+
+        received_at = datetime.now(timezone.utc)
+        data = _safe(payload.get("data"))
+        time_quality = int(payload.get("time_quality", 0) or 0)
+        sampled_at = None
+        if time_quality and payload.get("sampled_at"):
+            sampled_at = _parse_ts(payload.get("sampled_at"))
+
+        async with AsyncSessionLocal() as db:
+            await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+                             {'key': 'device-receipt:' + device_id + ':' + msg_id})
+            row = (await db.execute(
+                text('SELECT digest FROM device_receipts WHERE device_id=:d AND msg_id=:m'),
+                {'d': device_id, 'm': msg_id})).first()
+            if row:
+                if row[0] != digest:
+                    logger.warning(f"[DEV-ACK] msg_id 复用且内容不同 device={device_id} msg={msg_id}，冲突拒绝")
+                    await db.commit()
+                    return False
+                # 重复上报：不重复入库，仍回 stored
+                await db.commit()
+                await self._publish_device_ack(device_id, msg_id, "stored")
+                logger.info(f"[DEV-ACK] 重复上报已存在 device={device_id} msg={msg_id}，回 stored")
+                return True
+
+            result = await db.execute(select(Device).where(Device.device_id == device_id))
+            device = result.scalar_one_or_none()
+            if not device:
+                logger.warning(f"[DEV-ACK] 未注册设备 {device_id}，拒绝")
+                await db.commit()
+                return False
+
+            device.status = DeviceStatus.ONLINE
+            device.last_seen = datetime.now(timezone.utc)
+
+            greenhouse_id = device.greenhouse_id
+
+            # 契约 §3.2 顺序与字段映射
+            t = Telemetry(
+                device_id        = device.id,
+                greenhouse_id    = device.greenhouse_id,
+                timestamp        = received_at,          # 服务器接收时间
+                sampled_at       = sampled_at,           # 采样时间，未知为 NULL
+                time_quality     = time_quality,
+                msg_id           = msg_id,
+                data_type        = "telemetry",
+                temperature      = data.get("temperature"),
+                humidity         = data.get("humidity"),
+                soil_moisture    = data.get("soil_moisture"),
+                soil_temperature = data.get("soil_temperature"),
+                soil_ec          = data.get("soil_ec"),
+                light_intensity  = data.get("light"),
+                co2_level        = data.get("co2"),
+                ph_value         = data.get("ph"),
+                raw_data         = payload,
+            )
+            db.add(t)
+            await db.flush()
+            await db.execute(text(
+                'INSERT INTO device_receipts(device_id,msg_id,digest,kind) VALUES(:d,:m,:g,:k)'),
+                {'d': device_id, 'm': msg_id, 'g': digest, 'k': 'telemetry'})
+            await db.commit()
+
+        await self._publish_device_ack(device_id, msg_id, "stored")
+        await self._push_realtime(device_id, greenhouse_id, received_at, data, {}, None)
+        logger.info(f"[DEV-ACK] ✅ 遥测入库并回 stored device={device_id} msg={msg_id}")
+        return True
+
+    async def _publish_device_ack(self, device_id: str, msg_id: str, status: str):
+        """向 agri/device/{device_id}/ack 发布业务确认；retain=false。"""
+        if not self._client:
+            logger.warning(f"[DEV-ACK] MQTT client 未就绪，ACK 未发布 device={device_id} msg={msg_id}")
+            return
+        ack = dict(type="upload_ack", msg_id=msg_id, status=status)
+        try:
+            await self._client.publish(
+                f"agri/device/{device_id}/ack",
+                json.dumps(ack, separators=(",", ":")) + "\n",
+                qos=1, retain=False)
+        except Exception as e:
+            logger.error(f"[DEV-ACK] ACK 发布失败 device={device_id} msg={msg_id}: {e}")
 
     async def _handle_telemetry(self, robot_id: str, payload: dict, digest=None):
         async with AsyncSessionLocal() as db:

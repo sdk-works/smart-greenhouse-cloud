@@ -206,6 +206,8 @@ class Telemetry(Base):
     device_id       = Column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
     greenhouse_id   = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)
     timestamp       = Column(DateTime(timezone=True), nullable=False, index=True)
+    sampled_at      = Column(DateTime(timezone=True), nullable=True)  # 契约v1.2 §5: 采样时间，未知为NULL
+    time_quality    = Column(Integer, default=1)                      # 0=无可信时间，1=有
     msg_id          = Column(String(100), nullable=True, index=True)  # V9: 去重字段
     data_type       = Column(String(50))   # telemetry/heartbeat/state/image
     # 环境数据
