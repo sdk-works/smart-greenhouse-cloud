@@ -1,6 +1,6 @@
 # 智慧大棚云端平台
 
-公司内部私有仓库。版本来源、配置和迁移边界见 [PROJECT_MANAGEMENT.md](PROJECT_MANAGEMENT.md)。
+当前仓库可见性为 **Public**（按 PROJECT_MANAGEMENT.md 要求应设为 Private，待操作）。版本来源、配置和迁移边界见 [PROJECT_MANAGEMENT.md](PROJECT_MANAGEMENT.md)。
 
 ---
 
@@ -32,4 +32,22 @@
 
 ## 当前状态
 
-当前基线保留了线上功能，但尚未完成新工控机 MQTT 协议、新七参数土壤数据字段和巡检状态机的统一。修改这些功能前，应先完成协议对照文档和数据库备份验证。
+- 已完成全站 JWT 鉴权：14 个业务路由强制 `Depends(get_current_user)`，WebSocket 改用 `?token=` 鉴权；
+- 修复 `/auth/users`(GET/POST) 可匿名拉取全量用户的后门；
+- 表名 `dtu_receipts` 已修正为 `device_receipts`（对齐库里实际表名）；
+- 已部署前端（React 18 + antd + echarts）并经 Nginx 反代托管，公网已禁 `/docs`、`/health`；
+- EMQX ACL 由 `{allow, all}` 收紧为默认拒绝 + file ACL；
+- 新增每日数据库备份脚本 `scripts/backup_db.sh`（保留 14 天，crontab 03:00）；
+- 已建立 Git 版本管理（见下方「版本标签」），支持一键回退。
+- 待完成：新工控机 MQTT 协议对接、新七参数土壤数据字段、巡检状态机统一（修改前需先完成协议对照与数据库备份验证）。
+
+## 版本标签
+
+| 标签 | 含义 | 提交 |
+|---|---|---|
+| `v1.0.0-baseline` | 优化前的线上基线（服务端 `/opt/greenhouse`） | — |
+| `v1.1.0-security` | 全站鉴权 + 前端部署 + EMQX ACL 收紧 + 备份 + 版本管理 | `9063b26` |
+
+配套固件仓库 `JY_EnvMon` 对应标签：`v1.1.0-fix-p0`（修复 Flash 数据覆盖 / 光照溢出 / 无效值误报）。
+
+> 回退方法、部署目录与配置边界详见 [PROJECT_MANAGEMENT.md](PROJECT_MANAGEMENT.md)。
