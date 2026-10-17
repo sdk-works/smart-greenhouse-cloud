@@ -162,6 +162,7 @@ async def list_users(
 # ==============================================
 @router.get("/auth/users", response_model=List[UserOut])
 async def list_users_compat_fixed(
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     r = await db.execute(select(User).order_by(User.created_at))
@@ -169,6 +170,7 @@ async def list_users_compat_fixed(
 
 @router.post("/auth/users", response_model=List[UserOut])
 async def list_users_compat_post(
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     r = await db.execute(select(User).order_by(User.created_at))

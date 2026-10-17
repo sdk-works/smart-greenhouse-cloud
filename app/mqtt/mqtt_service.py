@@ -331,15 +331,15 @@ class MQTTService:
         # Transaction lock protects replay checks across server workers/restarts.
         await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
                          {'key': robot + ':' + msg})
-        row = (await db.execute(text('SELECT digest FROM dtu_receipts WHERE robot_id=:r AND msg_id=:m'),
-                                {'r': robot, 'm': msg})).first()
+        row = (await db.execute(text('SELECT digest FROM device_receipts WHERE device_id=:d AND msg_id=:m'),
+                                {'d': robot, 'm': msg})).first()
         if row and row[0] != digest:
             raise ValueError('msg_id reused for different content')
         return bool(row)
 
     async def _receipt_insert(self, db, robot, msg, digest, kind):
-        await db.execute(text('INSERT INTO dtu_receipts(robot_id,msg_id,digest,kind) VALUES(:r,:m,:d,:k)'),
-                         {'r': robot, 'm': msg, 'd': digest, 'k': kind})
+        await db.execute(text('INSERT INTO device_receipts(device_id,msg_id,digest,kind) VALUES(:d,:m,:g,:k)'),
+                         {'d': robot, 'm': msg, 'g': digest, 'k': kind})
 
     async def _dispatch_payload(self, message):
         topic = str(message.topic)
