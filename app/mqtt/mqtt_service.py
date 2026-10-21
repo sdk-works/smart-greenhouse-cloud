@@ -42,6 +42,22 @@ def _parse_ts(ts) -> datetime:
 def _safe(v, t=dict): return v if isinstance(v, t) else (t() if t is dict else None)
 
 
+
+def _normalize_realtime_data(data):
+    """把原始报文 data 补上与数据库/前端一致的字段名，避免实时面板丢字段。
+
+    设备上报用 co2/light/ph，而 DB 列与前端面板用 co2_level/light_intensity/ph_value。
+    这里只补别名，不覆盖已有值，原始字段保留。
+    """
+    if not isinstance(data, dict):
+        return {}
+    out = dict(data)
+    for raw, norm in (("co2", "co2_level"), ("light", "light_intensity"), ("ph", "ph_value")):
+        if out.get(norm) is None and out.get(raw) is not None:
+            out[norm] = out[raw]
+    return out
+
+
 class MQTTService:
     def __init__(self):
         self._client: Optional[aiomqtt.Client] = None
@@ -533,6 +549,9 @@ class MQTTService:
                 soil_moisture    = data.get("soil_moisture"),
                 soil_temperature = data.get("soil_temperature"),
                 soil_ec          = data.get("soil_ec"),
+                soil_nitrogen    = data.get("soil_nitrogen"),
+                soil_phosphorus  = data.get("soil_phosphorus"),
+                soil_potassium   = data.get("soil_potassium"),
                 light_intensity  = data.get("light"),
                 co2_level        = data.get("co2"),
                 ph_value         = data.get("ph"),
@@ -728,6 +747,7 @@ class MQTTService:
                     + (f" @ {pm['chassis_point']}" if pm else ""))
 
     async def _push_realtime(self, device_id, greenhouse_id, ts, data, robot_status, pm):
+        data = _normalize_realtime_data(data)
         try:
             redis = await get_redis()
             cache = CacheService(redis)
