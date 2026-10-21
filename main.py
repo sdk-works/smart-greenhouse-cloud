@@ -34,17 +34,30 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("✅ 数据库初始化完成")
 
-    # 单 worker 模式：MQTT 和 WebSocket 在同一进程共享状态
-    mqtt_task = asyncio.create_task(mqtt_service.connect())
-    ws_task   = asyncio.create_task(redis_listener())
-    logger.info("✅ MQTT 服务和 WebSocket 广播器已启动")
+    # ── 夜间只读实例守卫 ──────────────────────────────────────
+    # NIGHTLY_READONLY=1 时本实例不得接入 MQTT、不得启动任何后台任务，
+    # 仅用于 worktree 内起临时实例跑接口/测试。
+    readonly = os.getenv("NIGHTLY_READONLY") == "1"
+    mqtt_task = None
+    ws_task = None
+
+    if readonly:
+        logger.warning("⚠️ NIGHTLY_READONLY=1：已跳过 MQTT 连接与 Redis/WS 广播器启动（无任何后台任务）")
+    else:
+        # 单 worker 模式：MQTT 和 WebSocket 在同一进程共享状态
+        mqtt_task = asyncio.create_task(mqtt_service.connect())
+        ws_task   = asyncio.create_task(redis_listener())
+        logger.info("✅ MQTT 服务和 WebSocket 广播器已启动")
 
     yield
 
     # 停止服务
-    mqtt_task.cancel()
-    ws_task.cancel()
-    await mqtt_service.disconnect()
+    if mqtt_task is not None:
+        mqtt_task.cancel()
+    if ws_task is not None:
+        ws_task.cancel()
+    if not readonly:
+        await mqtt_service.disconnect()
     logger.info("👋 平台已停止")
 
 

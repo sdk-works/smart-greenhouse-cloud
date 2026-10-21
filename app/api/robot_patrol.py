@@ -10,7 +10,9 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.models.models import Device, Greenhouse, DeviceType
+from app.models.models import User
 
 router = APIRouter()
 
@@ -81,8 +83,9 @@ async def get_patrol_config(device_id: str, db: AsyncSession = Depends(get_db)):
 async def add_patrol_greenhouse(
     device_id: str,
     payload: PatrolGreenhouseIn,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "manage_robots")
     """为机器人添加一个巡逻大棚"""
     r = await db.execute(select(Device).where(Device.id == device_id))
     dev = r.scalar_one_or_none()
@@ -121,8 +124,9 @@ async def update_patrol_greenhouse(
     device_id: str,
     greenhouse_id: str,
     payload: PatrolGreenhouseIn,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "manage_robots")
     """修改巡逻大棚配置"""
     r = await db.execute(select(Device).where(Device.id == device_id))
     dev = r.scalar_one_or_none()
@@ -147,8 +151,9 @@ async def update_patrol_greenhouse(
 async def remove_patrol_greenhouse(
     device_id: str,
     greenhouse_id: str,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "manage_robots")
     """从巡逻列表移除大棚"""
     r = await db.execute(select(Device).where(Device.id == device_id))
     dev = r.scalar_one_or_none()
@@ -171,8 +176,9 @@ async def update_patrol_params(
     capture_interval: int = 5,
     return_battery_threshold: int = 20,
     auto_patrol: bool = False,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "manage_robots")
     """更新巡逻参数（速度、拍照间隔等）"""
     r = await db.execute(select(Device).where(Device.id == device_id))
     dev = r.scalar_one_or_none()

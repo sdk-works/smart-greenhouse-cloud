@@ -17,8 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.core.config import settings
 from app.models.models import Image, Device
+from app.models.models import User
 from app.schemas.schemas import ImageResponse
 
 router = APIRouter()
@@ -213,7 +215,8 @@ async def list_images(
 
 
 @router.delete("/{image_id}", status_code=204)
-async def delete_image(image_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_image(image_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_images")
     result = await db.execute(select(Image).where(Image.id == image_id))
     image  = result.scalar_one_or_none()
     if not image:

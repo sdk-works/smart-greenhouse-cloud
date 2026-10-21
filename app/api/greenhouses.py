@@ -5,7 +5,9 @@ from typing import List
 from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.models.models import Greenhouse, Device, Telemetry, DeviceStatus
+from app.models.models import User
 from app.schemas.schemas import GreenhouseCreate, GreenhouseUpdate, GreenhouseResponse
 
 router = APIRouter()
@@ -20,7 +22,8 @@ async def list_greenhouses(skip: int = 0, limit: int = 100, db: AsyncSession = D
 
 
 @router.post("/", response_model=GreenhouseResponse, status_code=status.HTTP_201_CREATED)
-async def create_greenhouse(payload: GreenhouseCreate, db: AsyncSession = Depends(get_db)):
+async def create_greenhouse(payload: GreenhouseCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_greenhouses")
     gh = Greenhouse(**payload.model_dump())
     db.add(gh)
     await db.commit()
@@ -38,7 +41,8 @@ async def get_greenhouse(greenhouse_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.put("/{greenhouse_id}", response_model=GreenhouseResponse)
-async def update_greenhouse(greenhouse_id: str, payload: GreenhouseUpdate, db: AsyncSession = Depends(get_db)):
+async def update_greenhouse(greenhouse_id: str, payload: GreenhouseUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_greenhouses")
     result = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))
     gh = result.scalar_one_or_none()
     if not gh:
@@ -51,7 +55,8 @@ async def update_greenhouse(greenhouse_id: str, payload: GreenhouseUpdate, db: A
 
 
 @router.delete("/{greenhouse_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_greenhouse(greenhouse_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_greenhouse(greenhouse_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_greenhouses")
     result = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))
     gh = result.scalar_one_or_none()
     if not gh:

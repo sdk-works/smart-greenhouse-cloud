@@ -11,8 +11,10 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.core.redis import CacheService, get_redis
 from app.models.models import Device, DeviceLog, Greenhouse
+from app.models.models import User
 from app.schemas.schemas import (
     DeviceCreate, DeviceUpdate, DeviceResponse,
     DeviceCommand, DeviceLogResponse
@@ -63,7 +65,8 @@ async def list_devices(
 
 
 @router.post("/", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
-async def register_device(payload: DeviceCreate, db: AsyncSession = Depends(get_db)):
+async def register_device(payload: DeviceCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     """
     注册新设备
     注册成功后自动：
@@ -123,7 +126,8 @@ async def get_device(device_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{device_id}", response_model=DeviceResponse)
-async def update_device(device_id: str, payload: DeviceUpdate, db: AsyncSession = Depends(get_db)):
+async def update_device(device_id: str, payload: DeviceUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
@@ -145,7 +149,8 @@ async def update_device(device_id: str, payload: DeviceUpdate, db: AsyncSession 
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_device(device_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_device(device_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
@@ -155,7 +160,8 @@ async def delete_device(device_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{device_id}/command")
-async def send_command(device_id: str, command: DeviceCommand, db: AsyncSession = Depends(get_db)):
+async def send_command(device_id: str, command: DeviceCommand, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:

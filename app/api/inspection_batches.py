@@ -8,7 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.models.models import InspectionBatch, InspectionVisit
+from app.models.models import User
 
 router = APIRouter()
 IDLE_TIMEOUT_MINUTES = 15
@@ -96,7 +98,8 @@ async def get_batch(batch_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{batch_id}/route-label")
 async def set_route_label(batch_id: str, body: RouteLabelIn,
-                          db: AsyncSession = Depends(get_db)):
+                          user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     row = await db.get(InspectionBatch, batch_id)
     if not row:
         raise HTTPException(404, "巡检批次不存在")
