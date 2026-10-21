@@ -60,3 +60,36 @@ for _r, _prefix, _tag, _secure in _ROUTERS:
 api_router.include_router(
     ws.router, prefix="/ws", tags=["WebSocket"], dependencies=[Depends(ws_current_user)]
 )
+
+# ── 尾斜杠兼容：为带 "/" 的路由额外注册无尾斜杠副本，消除 307 重定向 ──
+from fastapi.routing import APIRoute
+
+def _add_no_slash_duplicates(router):
+    extras = []
+    for route in list(router.routes):
+        if isinstance(route, APIRoute) and route.path.endswith("/") and len(route.path) > 1:
+            no_slash = route.path[:-1]
+            if any(getattr(r, "path", None) == no_slash for r in router.routes):
+                continue
+            extras.append(APIRoute(
+                path=no_slash,
+                endpoint=route.endpoint,
+                response_model=route.response_model,
+                status_code=route.status_code,
+                tags=route.tags,
+                dependencies=route.dependencies,
+                summary=route.summary,
+                description=route.description,
+                response_description=route.response_description,
+                responses=route.responses,
+                deprecated=route.deprecated,
+                methods=route.methods,
+                operation_id=route.operation_id,
+                response_model_by_alias=getattr(route, "response_model_by_alias", True),
+                include_in_schema=False,
+                response_class=route.response_class,
+                name=route.name,
+            ))
+    router.routes.extend(extras)
+
+_add_no_slash_duplicates(api_router)
