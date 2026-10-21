@@ -66,6 +66,8 @@ class User(Base):
     last_login = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
+    is_platform_operator = Column(Boolean, default=False, nullable=False)
     # 操作日志
     audit_logs = relationship("AuditLog", back_populates="user",
                               foreign_keys="AuditLog.user_id")
@@ -96,6 +98,10 @@ class Greenhouse(Base):
     crop_type   = Column(String(100))
     description = Column(Text)
     map_data    = Column(JSON)   # {width, height, waypoints:[{id,x,y,label,actions}]}
+    company_id  = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
+    base_id     = Column(String(36), ForeignKey("bases.id"), nullable=True, index=True)
+    coord_unit  = Column(String(20), default="schematic", nullable=False)
+    schema_version = Column(Integer, default=2, nullable=False)
     is_active   = Column(Boolean, default=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())
@@ -226,6 +232,11 @@ class Telemetry(Base):
     greenhouse_point    = Column(String(50))   # 大棚点位，如 "1号点"
     mapping_id          = Column(String(36))   # 映射关系ID
     raw_data            = Column(JSON)
+    company_id          = Column(String(36), nullable=True, index=True)
+    position_quality    = Column(String(20))
+    attribution_status  = Column(String(20))
+    map_version_id      = Column(String(36))
+    raw_message_id      = Column(String(36))
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     device      = relationship("Device",     back_populates="telemetry")
@@ -356,6 +367,8 @@ class RobotPointConfig(Base):
     nav_point_code = Column(String(64), nullable=False)
     greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=False)
     point_name = Column(String(100), nullable=False)
+    point_id = Column(String(36), ForeignKey("inspection_points.id"), nullable=True, index=True)
+    robot_map_version = Column(String(64), nullable=True)
     sample_seconds = Column(Integer, nullable=False, default=10)
     collect_soil = Column(Boolean, nullable=False, default=True)
     collect_environment = Column(Boolean, nullable=False, default=True)
@@ -433,3 +446,106 @@ class InspectionVisit(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     batch = relationship("InspectionBatch", back_populates="visits")
+
+
+# ── 第一批：公司 / 基地 / 稳定点位 / 机器人映射 / 绑定历史 / 地图版本 / 原始消息 ──
+class Company(Base):
+    __tablename__ = "companies"
+    id         = Column(String(36), primary_key=True, default=gen_uuid)
+    name       = Column(String(100), nullable=False)
+    status     = Column(String(20), default="active", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SiteBase(Base):
+    """基地（避免与 SQLAlchemy Base 同名，类名用 SiteBase）。"""
+    __tablename__ = "bases"
+    id         = Column(String(36), primary_key=True, default=gen_uuid)
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    name       = Column(String(100), nullable=False)
+    location   = Column(String(200))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class InspectionPoint(Base):
+    """稳定巡检点位，独立于机器人。"""
+    __tablename__ = "inspection_points"
+    __table_args__ = (UniqueConstraint("greenhouse_id", "code", name="uq_inspection_point_code"),)
+    id                = Column(String(36), primary_key=True, default=gen_uuid)
+    greenhouse_id     = Column(String(36), ForeignKey("greenhouses.id"), nullable=False, index=True)
+    code              = Column(String(64), nullable=False)
+    name              = Column(String(100), nullable=False)
+    zone              = Column(String(100))
+    x                 = Column(Float)
+    y                 = Column(Float)
+    coord_unit        = Column(String(20), default="schematic", nullable=False)
+    map_edit_revision = Column(Integer, default=0, nullable=False)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+    retired_at        = Column(DateTime(timezone=True))
+
+
+class RobotPointMapping(Base):
+    """机器人导航映射：point_id ↔ (robot_id, nav_point_code)，支持一点多机器人。"""
+    __tablename__ = "robot_point_mappings"
+    id                  = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id            = Column(String(100), nullable=False, index=True)
+    robot_map_version   = Column(String(64))
+    nav_point_code      = Column(String(64), nullable=False, index=True)
+    point_id            = Column(String(36), ForeignKey("inspection_points.id"), nullable=False, index=True)
+    greenhouse_id       = Column(String(36), ForeignKey("greenhouses.id"), nullable=False, index=True)
+    sample_seconds      = Column(Integer, default=10, nullable=False)
+    collect_soil        = Column(Boolean, default=True, nullable=False)
+    collect_environment = Column(Boolean, default=True, nullable=False)
+    take_photo          = Column(Boolean, default=True, nullable=False)
+    enabled             = Column(Boolean, default=True, nullable=False)
+    note                = Column(Text)
+    effective_from      = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    effective_to        = Column(DateTime(timezone=True))
+    status              = Column(String(20), default="active", nullable=False)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DeviceBinding(Base):
+    """设备安装/绑定历史（固定设备）。"""
+    __tablename__ = "device_bindings"
+    id              = Column(String(36), primary_key=True, default=gen_uuid)
+    device_id       = Column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    greenhouse_id   = Column(String(36), ForeignKey("greenhouses.id"), nullable=False)
+    point_id        = Column(String(36), ForeignKey("inspection_points.id"), nullable=True)
+    channel         = Column(String(50), default="default", nullable=False)
+    binding_version = Column(Integer, default=1, nullable=False)
+    start_at        = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    end_at          = Column(DateTime(timezone=True))
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MapVersion(Base):
+    """已发布地图版本（不可变）。"""
+    __tablename__ = "map_versions"
+    __table_args__ = (UniqueConstraint("greenhouse_id", "version", name="uq_map_version"),)
+    id              = Column(String(36), primary_key=True, default=gen_uuid)
+    greenhouse_id   = Column(String(36), ForeignKey("greenhouses.id"), nullable=False, index=True)
+    version         = Column(Integer, nullable=False)
+    layout          = Column(JSON, nullable=False)
+    defaults        = Column(JSON, nullable=False)
+    points_snapshot = Column(JSON, nullable=False)
+    schema_version  = Column(Integer, default=2, nullable=False)
+    published_at    = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    published_by    = Column(String(36))
+    immutable       = Column(Boolean, default=True, nullable=False)
+
+
+class RawMessage(Base):
+    """原始报文（可追溯/可重放）。"""
+    __tablename__ = "raw_messages"
+    id             = Column(String(36), primary_key=True, default=gen_uuid)
+    msg_id         = Column(String(100), index=True)
+    source         = Column(String(30), nullable=False)
+    device_id      = Column(String(100), index=True)
+    received_at    = Column(DateTime(timezone=True), nullable=False)
+    payload        = Column(JSON)
+    payload_bytes  = Column(Integer)
+    parse_status   = Column(String(20), default="stored", nullable=False)
+    parser_version = Column(String(20))
+    error          = Column(Text)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
