@@ -1,83 +1,134 @@
 """
 dashboard.py - 仪表盘统计接口
-修复:
-  [#11] get_overview() N+1 查询优化：使用 JOIN + subquery 替代 for 循环多次 SELECT
+
+M1 隔离收尾：
+  - `/dashboard/stats` 全部计数按公司范围过滤（大棚/设备/在线/任务/遥测/图片）。
+  - 平台运营可用 `?company_id=` 查看指定公司，该次访问落审计日志。
+  - 业务用户传其它公司 → 403（ensure_company_access）。
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
+from app.api.auth import get_current_user
+from app.core.audit import ensure_company_access
+from app.core.company_scope import (
+    company_filter, is_platform, resolve_company_id, scoped_greenhouse_ids,
+)
 from app.core.database import get_db
 from app.models.models import (
     Greenhouse, Device, Telemetry,
-    RobotTask, Image, TaskStatus, DeviceStatus
+    RobotTask, Image, TaskStatus, DeviceStatus, User,
 )
 
 router = APIRouter()
 
 
-@router.get("/stats")
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    """平台整体统计（单次查询）"""
-    today = datetime.now(timezone.utc).replace(
+def _day_start() -> datetime:
+    return datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
+
+
+async def _scoped_counts(
+    db: AsyncSession, user: User, company_id: Optional[str], today: datetime
+) -> dict:
+    ghq = scoped_greenhouse_ids(user, company_id)
+
+    def _gh_cond(column):
+        """ghq 为 None 表示平台运营的全平台视角，不加条件。"""
+        return [] if ghq is None else [column.in_(ghq)]
+
+    total_greenhouses = (await db.execute(
+        select(func.count(Greenhouse.id)).where(
+            Greenhouse.is_active == True, *_gh_cond(Greenhouse.id)
+        )
+    )).scalar() or 0
+
+    total_devices = (await db.execute(
+        select(func.count(Device.id)).where(*_gh_cond(Device.greenhouse_id))
+    )).scalar() or 0
+
+    online_devices = (await db.execute(
+        select(func.count(Device.id)).where(
+            Device.status == DeviceStatus.ONLINE, *_gh_cond(Device.greenhouse_id)
+        )
+    )).scalar() or 0
+
+    active_tasks = (await db.execute(
+        select(func.count(RobotTask.id)).where(
+            RobotTask.status.in_([TaskStatus.RUNNING, TaskStatus.PENDING]),
+            *_gh_cond(RobotTask.greenhouse_id)
+        )
+    )).scalar() or 0
+
+    if is_platform(user) and company_id:
+        tel_cond = [Telemetry.company_id == company_id]
+    elif ghq is None:
+        tel_cond = []
+    else:
+        tel_cond = [company_filter(user, Telemetry.company_id)]
+    today_telemetry_count = (await db.execute(
+        select(func.count(Telemetry.id)).where(
+            Telemetry.created_at >= today, *tel_cond
+        )
+    )).scalar() or 0
+
+    today_images_count = (await db.execute(
+        select(func.count(Image.id)).where(
+            Image.created_at >= today, *_gh_cond(Image.greenhouse_id)
+        )
+    )).scalar() or 0
+
     return {
-        "total_greenhouses": (
-            await db.execute(
-                select(func.count(Greenhouse.id))
-                .where(Greenhouse.is_active == True)
-            )
-        ).scalar() or 0,
+        "total_greenhouses": int(total_greenhouses),
+        "total_devices": int(total_devices),
+        "online_devices": int(online_devices),
+        "active_tasks": int(active_tasks),
+        "today_telemetry_count": int(today_telemetry_count),
+        "today_images_count": int(today_images_count),
+    }
 
-        "total_devices": (
-            await db.execute(select(func.count(Device.id)))
-        ).scalar() or 0,
 
-        "online_devices": (
-            await db.execute(
-                select(func.count(Device.id))
-                .where(Device.status == DeviceStatus.ONLINE)
-            )
-        ).scalar() or 0,
-
-        "active_tasks": (
-            await db.execute(
-                select(func.count(RobotTask.id))
-                .where(RobotTask.status.in_([TaskStatus.RUNNING, TaskStatus.PENDING]))
-            )
-        ).scalar() or 0,
-
-        "today_telemetry_count": (
-            await db.execute(
-                select(func.count(Telemetry.id))
-                .where(Telemetry.created_at >= today)
-            )
-        ).scalar() or 0,
-
-        "today_images_count": (
-            await db.execute(
-                select(func.count(Image.id))
-                .where(Image.created_at >= today)
-            )
-        ).scalar() or 0,
-
+@router.get("/stats")
+async def get_stats(
+    company_id: Optional[str] = Query(
+        None, description="仅平台运营可用：查看指定公司的统计（会落审计日志）"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """平台整体统计（按公司范围聚合）。"""
+    # 先鉴权后审计：业务用户跨公司 403，平台运营跨公司落审计日志
+    await ensure_company_access(db, user, company_id, resource="dashboard.stats",
+                                action="read")
+    counts = await _scoped_counts(db, user, company_id, _day_start())
+    await db.commit()
+    return {
+        **counts,
+        "scope": {
+            "company_id": company_id or (None if is_platform(user)
+                                         else resolve_company_id(user)),
+            "platform_view": is_platform(user) and company_id is None,
+        },
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
 @router.get("/greenhouses/overview")
-async def get_overview(db: AsyncSession = Depends(get_db)):
+async def get_overview(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """
-    所有大棚状态概览（优化版，减少数据库查询次数）
-    原版：每个大棚 3 次 SELECT（N+1 问题）
-    优化：设备计数用一次批量查询，遥测用子查询
+    所有大棚状态概览（按公司范围过滤；设备计数用一次批量查询，遥测用子查询）
     """
-    # 获取所有激活大棚
-    gh_result = await db.execute(
-        select(Greenhouse).where(Greenhouse.is_active == True)
-    )
+    ghq = scoped_greenhouse_ids(user, None)
+    gh_query = select(Greenhouse).where(Greenhouse.is_active == True)
+    if ghq is not None:
+        gh_query = gh_query.where(Greenhouse.id.in_(ghq))
+    gh_result = await db.execute(gh_query)
     greenhouses = gh_result.scalars().all()
 
     if not greenhouses:

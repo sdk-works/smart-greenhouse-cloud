@@ -9,9 +9,10 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 from app.core.database import get_db
+from app.core.mqtt_policy import assert_can_control
 from app.api.auth import check_permission, get_current_user
 from app.models.models import RobotTask, Device, TaskStatus
-from app.models.models import User
+from app.models.models import Greenhouse, User
 from app.schemas.schemas import RobotTaskCreate, RobotTaskUpdate, RobotTaskResponse
 from app.mqtt.mqtt_service import mqtt_service
 
@@ -99,6 +100,10 @@ async def dispatch_task(task_id: str, user: User = Depends(get_current_user), db
     device = dev.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    # M1：控制/任务下发必须校验设备归属（MQTT 主题约束 §约束4）
+    gh = await db.get(Greenhouse, device.greenhouse_id) if device.greenhouse_id else None
+    assert_can_control(user, gh.company_id if gh else None, device.device_id)
 
     command = {
         "command": "start_task",

@@ -11,7 +11,10 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.core.company_scope import company_filter, is_platform
+from app.core.company_scope import (
+    cache_company_for, can_access_company, company_filter, is_platform,
+)
+from app.core.mqtt_policy import assert_can_control
 from app.models.models import Greenhouse
 from app.api.auth import check_permission, get_current_user
 from app.core.redis import CacheService, get_redis
@@ -61,9 +64,10 @@ async def list_devices(
     devices = result.scalars().all()
 
     redis = await get_redis()
-    cache = CacheService(redis)
     out = []
     for d in devices:
+        gh = await db.get(Greenhouse, d.greenhouse_id) if d.greenhouse_id else None
+        cache = CacheService(redis, company_id=cache_company_for(user, gh.company_id if gh else None))
         r = DeviceResponse.model_validate(d)
         r.is_online = await cache.get_device_online(d.device_id)
         out.append(r)
@@ -118,13 +122,17 @@ async def register_device(payload: DeviceCreate, user: User = Depends(get_curren
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)
-async def get_device(device_id: str, db: AsyncSession = Depends(get_db)):
+async def get_device(device_id: str, db: AsyncSession = Depends(get_db),
+                     user: User = Depends(get_current_user)):
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    gh = await db.get(Greenhouse, device.greenhouse_id) if device.greenhouse_id else None
+    if not is_platform(user) and not can_access_company(user, gh.company_id if gh else None):
+        raise HTTPException(status_code=404, detail="设备不存在")
     redis = await get_redis()
-    cache = CacheService(redis)
+    cache = CacheService(redis, company_id=cache_company_for(user, gh.company_id if gh else None))
     r = DeviceResponse.model_validate(device)
     r.is_online = await cache.get_device_online(device.device_id)
     r.mqtt_topics = _build_mqtt_topics(device.device_id, device.greenhouse_id or "")
@@ -173,10 +181,14 @@ async def send_command(device_id: str, command: DeviceCommand, user: User = Depe
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
 
+    # M1：控制下发必须校验设备归属（MQTT 主题约束 §约束4）
+    gh = await db.get(Greenhouse, device.greenhouse_id) if device.greenhouse_id else None
+    assert_can_control(user, gh.company_id if gh else None, device.device_id)
+
     cmd = command.model_dump(exclude_none=True)
-    sent = await mqtt_service.publish_command(
-        device.device_id, device.greenhouse_id or "", cmd
-    )
+    # 修正：publish_command(device_id, command) 只接受两个参数，
+    # 原先多传的 greenhouse_id 会让调用直接 TypeError（500）。
+    sent = await mqtt_service.publish_command(device.device_id, cmd)
     if not sent:
         raise HTTPException(status_code=503, detail="MQTT 未连接，指令发送失败")
 
@@ -226,13 +238,17 @@ async def get_device_mqtt_topics(device_id: str, db: AsyncSession = Depends(get_
 
 
 @router.get("/{device_id}/status")
-async def get_device_realtime_status(device_id: str, db: AsyncSession = Depends(get_db)):
+async def get_device_realtime_status(device_id: str, db: AsyncSession = Depends(get_db),
+                                     user: User = Depends(get_current_user)):
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    gh = await db.get(Greenhouse, device.greenhouse_id) if device.greenhouse_id else None
+    if not is_platform(user) and not can_access_company(user, gh.company_id if gh else None):
+        raise HTTPException(status_code=404, detail="设备不存在")
     redis = await get_redis()
-    cache = CacheService(redis)
+    cache = CacheService(redis, company_id=cache_company_for(user, gh.company_id if gh else None))
     return {
         "device_id":  device.device_id,
         "is_online":  await cache.get_device_online(device.device_id),
