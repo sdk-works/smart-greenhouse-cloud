@@ -5,7 +5,7 @@
 """
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -13,11 +13,12 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.core.redis import get_redis
 from app.models.models import (
-    Alert, AuditLog, Company, Device, DeviceBinding, DeviceStatus, DeviceType,
+    ActuatorCommand, AiAdviceLog, Alert, AuditLog, Company, Device, DeviceBinding, DeviceStatus, DeviceType,
     Greenhouse, Image, Incident, IncidentEvent, InspectionBatch,
     InspectionEvidence, InspectionPoint, InspectionVisit, MapVersion,
     RobotMapAlert, RobotMapRegistry, RobotPointConfig, RobotPointMapping,
-    RobotTask, TaskStatus, TaskType, Telemetry, User,
+    CommandStatus, PlantingBatch, RobotTask, TaskStatus, TaskType,
+    Telemetry, User,
 )
 
 
@@ -31,7 +32,8 @@ class IsoFixture:
         self.tel_rows, self.images, self.tasks = [], [], []
         self.points, self.mappings, self.map_versions = [], [], []
         self.ev_rows, self.map_reg_rows, self.map_alerts = [], [], []
-        self.bindings, self.incidents, self.alerts, self.batches = [], [], [], []
+        self.bindings, self.incidents, self.alerts = [], [], []
+        self.batches, self.plantings, self.ai_logs, self.commands = [], [], [], []
         self.users, self.tokens = [], []
 
     # ── 基础对象 ─────────────────────────────────────────────
@@ -160,6 +162,29 @@ class IsoFixture:
         db.add(a); self.alerts.append(a.id); await db.flush()
         return a
 
+    async def planting_batch(self, db, gh, code, crop="番茄", zone=None,
+                             status="planned", company_id=None):
+        b = PlantingBatch(id=str(uuid.uuid4()), code=code, greenhouse_id=gh.id,
+                          zone=zone, crop_type=crop, status=status,
+                          company_id=company_id)
+        db.add(b); self.plantings.append(b.id); await db.flush()
+        return b
+
+    async def ai_log(self, db, gh, advice=None, company_id=None, **kw):
+        row = AiAdviceLog(id=str(uuid.uuid4()), greenhouse_id=gh.id, kind="advice",
+                          advice=advice or [], company_id=company_id, **kw)
+        db.add(row); self.ai_logs.append(row.id); await db.flush()
+        return row
+
+    async def command(self, db, dev, gh, action="open", status="pending"):
+        import uuid as _u
+        c = ActuatorCommand(id=str(_u.uuid4()), command_id=str(_u.uuid4()),
+                            device_id=dev.id, greenhouse_id=gh.id, action=action,
+                            status=CommandStatus(status),
+                            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5))
+        db.add(c); self.commands.append(c.id); await db.flush()
+        return c
+
     async def batch(self, db, robot_id, status="running", last_event_at=None):
         from app.models.models import InspectionBatch
         b = InspectionBatch(id=str(uuid.uuid4()), robot_id=robot_id, status=status,
@@ -172,6 +197,9 @@ class IsoFixture:
 # 删除顺序：子表在前、父表在后，且每一层单独提交，
 # 免得 ORM 的批量排序（依赖信息不全时不可靠）把父表删到子表前面。
 _WIPE_ORDER = (
+    (AiAdviceLog,       "ai_logs"),
+    (ActuatorCommand,    "commands"),
+    (PlantingBatch,      "plantings"),
     (Alert,             "alerts"),
     (Incident,          "incidents"),
     (InspectionEvidence, "ev_rows"),

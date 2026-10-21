@@ -1,0 +1,7047 @@
+openapi: 3.1.0
+info:
+  title: Smart Greenhouse Platform
+  description: 智慧农业巡检机器人物联网云端平台
+  version: 1.0.0
+paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Auth 认证&权限
+      summary: Login
+      operationId: login_api_v1_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Auth 认证&权限
+      summary: Logout
+      operationId: logout_api_v1_auth_logout_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Auth 认证&权限
+      summary: Me
+      operationId: me_api_v1_auth_me_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/users:
+    get:
+      tags:
+      - Auth 认证&权限
+      summary: List Users
+      operationId: list_users_api_v1_auth_users_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserOut'
+                title: Response List Users Api V1 Auth Users Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Auth 认证&权限
+      summary: Create User
+      operationId: create_user_api_v1_auth_users_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/auth/users:
+    get:
+      tags:
+      - Auth 认证&权限
+      summary: List Users Compat Fixed
+      operationId: list_users_compat_fixed_api_v1_auth_auth_users_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserOut'
+                title: Response List Users Compat Fixed Api V1 Auth Auth Users Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Auth 认证&权限
+      summary: List Users Compat Post
+      operationId: list_users_compat_post_api_v1_auth_auth_users_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserOut'
+                title: Response List Users Compat Post Api V1 Auth Auth Users Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/users/{user_id}/role:
+    put:
+      tags:
+      - Auth 认证&权限
+      summary: Update Role
+      operationId: update_role_api_v1_auth_users__user_id__role_put
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: role
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/UserRole'
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/users/{user_id}/toggle:
+    put:
+      tags:
+      - Auth 认证&权限
+      summary: Toggle User
+      operationId: toggle_user_api_v1_auth_users__user_id__toggle_put
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/permissions:
+    get:
+      tags:
+      - Auth 认证&权限
+      summary: Get Permissions
+      operationId: get_permissions_api_v1_auth_permissions_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/init-admin:
+    post:
+      tags:
+      - Auth 认证&权限
+      summary: Init Admin
+      operationId: init_admin_api_v1_auth_init_admin_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/stats:
+    get:
+      tags:
+      - Dashboard
+      summary: Get Stats
+      description: 平台整体统计（按公司范围聚合）。
+      operationId: get_stats_api_v1_dashboard_stats_get
+      parameters:
+      - name: company_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 仅平台运营可用：查看指定公司的统计（会落审计日志）
+          title: Company Id
+        description: 仅平台运营可用：查看指定公司的统计（会落审计日志）
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/greenhouses/overview:
+    get:
+      tags:
+      - Dashboard
+      summary: Get Overview
+      description: 所有大棚状态概览（按公司范围过滤；设备计数用一次批量查询，遥测用子查询）
+      operationId: get_overview_api_v1_dashboard_greenhouses_overview_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/greenhouses/:
+    get:
+      tags:
+      - Greenhouses
+      summary: List Greenhouses
+      operationId: list_greenhouses_api_v1_greenhouses__get
+      parameters:
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GreenhouseResponse'
+                title: Response List Greenhouses Api V1 Greenhouses  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Greenhouses
+      summary: Create Greenhouse
+      operationId: create_greenhouse_api_v1_greenhouses__post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GreenhouseCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GreenhouseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/greenhouses/{greenhouse_id}:
+    get:
+      tags:
+      - Greenhouses
+      summary: Get Greenhouse
+      operationId: get_greenhouse_api_v1_greenhouses__greenhouse_id__get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GreenhouseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Greenhouses
+      summary: Update Greenhouse
+      operationId: update_greenhouse_api_v1_greenhouses__greenhouse_id__put
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GreenhouseUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GreenhouseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Greenhouses
+      summary: Delete Greenhouse
+      operationId: delete_greenhouse_api_v1_greenhouses__greenhouse_id__delete
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/greenhouses/{greenhouse_id}/stats:
+    get:
+      tags:
+      - Greenhouses
+      summary: Get Greenhouse Stats
+      operationId: get_greenhouse_stats_api_v1_greenhouses__greenhouse_id__stats_get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/:
+    get:
+      tags:
+      - Devices
+      summary: List Devices
+      operationId: list_devices_api_v1_devices__get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: device_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Type
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceResponse'
+                title: Response List Devices Api V1 Devices  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Devices
+      summary: Register Device
+      operationId: register_device_api_v1_devices__post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}:
+    get:
+      tags:
+      - Devices
+      summary: Get Device
+      operationId: get_device_api_v1_devices__device_id__get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Devices
+      summary: Update Device
+      operationId: update_device_api_v1_devices__device_id__put
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Devices
+      summary: Delete Device
+      operationId: delete_device_api_v1_devices__device_id__delete
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/command:
+    post:
+      tags:
+      - Devices
+      summary: Send Command
+      operationId: send_command_api_v1_devices__device_id__command_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCommand'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/logs:
+    get:
+      tags:
+      - Devices
+      summary: Get Device Logs
+      operationId: get_device_logs_api_v1_devices__device_id__logs_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceLogResponse'
+                title: Response Get Device Logs Api V1 Devices  Device Id  Logs Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/mqtt-topics:
+    get:
+      tags:
+      - Devices
+      summary: Get Device Mqtt Topics
+      description: 获取设备的 MQTT topic 信息（供机器人端参考）
+      operationId: get_device_mqtt_topics_api_v1_devices__device_id__mqtt_topics_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/status:
+    get:
+      tags:
+      - Devices
+      summary: Get Device Realtime Status
+      operationId: get_device_realtime_status_api_v1_devices__device_id__status_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/telemetry/:
+    get:
+      tags:
+      - Telemetry
+      summary: List Telemetry
+      operationId: list_telemetry_api_v1_telemetry__get
+      parameters:
+      - name: device_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 168
+          default: 24
+          title: Hours
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 500
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TelemetryResponse'
+                title: Response List Telemetry Api V1 Telemetry  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/telemetry/latest/{device_id}:
+    get:
+      tags:
+      - Telemetry
+      summary: Get Latest
+      operationId: get_latest_api_v1_telemetry_latest__device_id__get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tasks/task-state-machine:
+    get:
+      tags:
+      - Tasks
+      summary: Task State Machine
+      description: 巡检任务状态机定义（供前端/联调查询允许流转）。
+      operationId: task_state_machine_api_v1_tasks_task_state_machine_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tasks/:
+    get:
+      tags:
+      - Tasks
+      summary: List Tasks
+      operationId: list_tasks_api_v1_tasks__get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: task_status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Status
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RobotTaskResponse'
+                title: Response List Tasks Api V1 Tasks  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Tasks
+      summary: Create Task
+      operationId: create_task_api_v1_tasks__post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RobotTaskCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RobotTaskResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tasks/{task_id}:
+    get:
+      tags:
+      - Tasks
+      summary: Get Task
+      operationId: get_task_api_v1_tasks__task_id__get
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RobotTaskResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Tasks
+      summary: Update Task
+      description: 更新任务。M2：状态变更走状态机校验，非法流转 400；snapshot 永不被改写。
+      operationId: update_task_api_v1_tasks__task_id__put
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RobotTaskUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RobotTaskResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tasks/{task_id}/status:
+    post:
+      tags:
+      - Tasks
+      summary: Set Task Status
+      description: 专用的任务状态流转端点（非法流转 400）。
+      operationId: set_task_status_api_v1_tasks__task_id__status_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskStatusIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tasks/{task_id}/dispatch:
+    post:
+      tags:
+      - Tasks
+      summary: Dispatch Task
+      operationId: dispatch_task_api_v1_tasks__task_id__dispatch_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tasks/{task_id}/cancel:
+    post:
+      tags:
+      - Tasks
+      summary: Cancel Task
+      operationId: cancel_task_api_v1_tasks__task_id__cancel_post
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/images/upload/{device_id}:
+    post:
+      tags:
+      - Images
+      summary: Upload Image
+      description: '图片 HTTP 上传接口（v7主要图片通道，替代MQTT图片传输）
+
+
+        机器人端调用逻辑：
+
+        - 4G网络：本地缓存，不上传
+
+        - WiFi/有线：批量上传缓存中的图片'
+      operationId: upload_image_api_v1_images_upload__device_id__post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+      - name: position_x
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Position X
+      - name: position_y
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Position Y
+      - name: network_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: '网络类型: wifi/ethernet/4g'
+          title: Network Type
+        description: '网络类型: wifi/ethernet/4g'
+      - name: file_hash
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 文件MD5，用于去重
+          title: File Hash
+        description: 文件MD5，用于去重
+      - name: nav_point_code
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 机器人导航点位编号
+          title: Nav Point Code
+        description: 机器人导航点位编号
+      - name: greenhouse_point
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 大棚点位名称
+          title: Greenhouse Point
+        description: 大棚点位名称
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_image_api_v1_images_upload__device_id__post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/images/upload/batch/{device_id}:
+    post:
+      tags:
+      - Images
+      summary: Upload Images Batch
+      description: '批量上传接口（WiFi下的缓存队列上传）
+
+        机器人端：4G时本地缓存 → WiFi时调用此接口批量上传'
+      operationId: upload_images_batch_api_v1_images_upload_batch__device_id__post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_images_batch_api_v1_images_upload_batch__device_id__post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/images/:
+    get:
+      tags:
+      - Images
+      summary: List Images
+      operationId: list_images_api_v1_images__get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+      - name: device_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageResponse'
+                title: Response List Images Api V1 Images  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/images/{image_id}:
+    delete:
+      tags:
+      - Images
+      summary: Delete Image
+      operationId: delete_image_api_v1_images__image_id__delete
+      parameters:
+      - name: image_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Image Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/greenhouse/{greenhouse_id}/map:
+    get:
+      tags:
+      - Settings
+      summary: Get Greenhouse Map
+      description: 获取大棚地图配置（巡检点位、传感器位置）
+      operationId: get_greenhouse_map_api_v1_settings_greenhouse__greenhouse_id__map_get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GreenhouseMapConfig'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Settings
+      summary: Update Greenhouse Map
+      operationId: update_greenhouse_map_api_v1_settings_greenhouse__greenhouse_id__map_put
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GreenhouseMapConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/greenhouse/{greenhouse_id}/map/waypoints:
+    post:
+      tags:
+      - Settings
+      summary: Add Waypoint
+      operationId: add_waypoint_api_v1_settings_greenhouse__greenhouse_id__map_waypoints_post
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaypointConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/greenhouse/{greenhouse_id}/map/waypoints/{waypoint_id}:
+    delete:
+      tags:
+      - Settings
+      summary: Delete Waypoint
+      operationId: delete_waypoint_api_v1_settings_greenhouse__greenhouse_id__map_waypoints__waypoint_id__delete
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: waypoint_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Waypoint Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/robot/{device_id}/config:
+    get:
+      tags:
+      - Settings
+      summary: Get Robot Config
+      description: 获取机器人巡检配置
+      operationId: get_robot_config_api_v1_settings_robot__device_id__config_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RobotConfig'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Settings
+      summary: Update Robot Config
+      operationId: update_robot_config_api_v1_settings_robot__device_id__config_put
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RobotConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/robot/{device_id}/assign-greenhouse/{greenhouse_id}:
+    post:
+      tags:
+      - Settings
+      summary: Assign Robot To Greenhouse
+      operationId: assign_robot_to_greenhouse_api_v1_settings_robot__device_id__assign_greenhouse__greenhouse_id__post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/mqtt:
+    get:
+      tags:
+      - Settings
+      summary: Get Mqtt Config
+      description: 获取当前 MQTT 配置（密码脱敏）
+      operationId: get_mqtt_config_api_v1_settings_mqtt_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Settings
+      summary: Update Mqtt Config
+      operationId: update_mqtt_config_api_v1_settings_mqtt_put
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MQTTConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/system:
+    get:
+      tags:
+      - Settings
+      summary: Get System Config
+      description: 获取系统全局配置（告警阈值等）
+      operationId: get_system_config_api_v1_settings_system_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemConfig'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Settings
+      summary: Update System Config
+      operationId: update_system_config_api_v1_settings_system_put
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings/overview:
+    get:
+      tags:
+      - Settings
+      summary: Get All Config
+      description: 配置总览（用于配置中心首页）
+      operationId: get_all_config_api_v1_settings_overview_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/greenhouses/{greenhouse_id}/waypoints:
+    get:
+      tags:
+      - Waypoints
+      summary: List Waypoints
+      description: 获取大棚所有点位
+      operationId: list_waypoints_api_v1_greenhouses__greenhouse_id__waypoints_get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WaypointOut'
+                title: Response List Waypoints Api V1 Greenhouses  Greenhouse Id  Waypoints
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Waypoints
+      summary: Create Waypoint
+      operationId: create_waypoint_api_v1_greenhouses__greenhouse_id__waypoints_post
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaypointIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaypointOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/greenhouses/{greenhouse_id}/waypoints/{wp_id}:
+    put:
+      tags:
+      - Waypoints
+      summary: Update Waypoint
+      operationId: update_waypoint_api_v1_greenhouses__greenhouse_id__waypoints__wp_id__put
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: wp_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Wp Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaypointIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaypointOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Waypoints
+      summary: Delete Waypoint
+      operationId: delete_waypoint_api_v1_greenhouses__greenhouse_id__waypoints__wp_id__delete
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: wp_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Wp Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/patrol-config:
+    get:
+      tags:
+      - Patrol
+      summary: Get Patrol Config
+      description: 获取机器人巡逻配置（含所有关联大棚）
+      operationId: get_patrol_config_api_v1_devices__device_id__patrol_config_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatrolConfigOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/patrol-greenhouses:
+    post:
+      tags:
+      - Patrol
+      summary: Add Patrol Greenhouse
+      operationId: add_patrol_greenhouse_api_v1_devices__device_id__patrol_greenhouses_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatrolGreenhouseIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/patrol-greenhouses/{greenhouse_id}:
+    put:
+      tags:
+      - Patrol
+      summary: Update Patrol Greenhouse
+      operationId: update_patrol_greenhouse_api_v1_devices__device_id__patrol_greenhouses__greenhouse_id__put
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatrolGreenhouseIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Patrol
+      summary: Remove Patrol Greenhouse
+      operationId: remove_patrol_greenhouse_api_v1_devices__device_id__patrol_greenhouses__greenhouse_id__delete
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/patrol-params:
+    put:
+      tags:
+      - Patrol
+      summary: Update Patrol Params
+      operationId: update_patrol_params_api_v1_devices__device_id__patrol_params_put
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: patrol_speed
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0.5
+          title: Patrol Speed
+      - name: capture_interval
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 5
+          title: Capture Interval
+      - name: return_battery_threshold
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          title: Return Battery Threshold
+      - name: auto_patrol
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Auto Patrol
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/:
+    get:
+      tags:
+      - Deployments 巡检方案
+      summary: List Deployments
+      operationId: list_deployments_api_v1_deployments__get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeploymentOut'
+                title: Response List Deployments Api V1 Deployments  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Deployments 巡检方案
+      summary: Create Deployment
+      operationId: create_deployment_api_v1_deployments__post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/{dep_id}:
+    get:
+      tags:
+      - Deployments 巡检方案
+      summary: Get Deployment
+      operationId: get_deployment_api_v1_deployments__dep_id__get
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Deployments 巡检方案
+      summary: Update Deployment
+      operationId: update_deployment_api_v1_deployments__dep_id__put
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Deployments 巡检方案
+      summary: Delete Deployment
+      operationId: delete_deployment_api_v1_deployments__dep_id__delete
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/{dep_id}/publish:
+    post:
+      tags:
+      - Deployments 巡检方案
+      summary: Publish Deployment
+      operationId: publish_deployment_api_v1_deployments__dep_id__publish_post
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/{dep_id}/preview-config:
+    get:
+      tags:
+      - Deployments 巡检方案
+      summary: Preview Config
+      operationId: preview_config_api_v1_deployments__dep_id__preview_config_get
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/{dep_id}/point-mapping:
+    get:
+      tags:
+      - Deployments 巡检方案
+      summary: List Mappings
+      operationId: list_mappings_api_v1_deployments__dep_id__point_mapping_get
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PointMappingOut'
+                title: Response List Mappings Api V1 Deployments  Dep Id  Point Mapping
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Deployments 巡检方案
+      summary: Add Mapping
+      operationId: add_mapping_api_v1_deployments__dep_id__point_mapping_post
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointMappingIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointMappingOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/{dep_id}/point-mapping/{mapping_id}:
+    put:
+      tags:
+      - Deployments 巡检方案
+      summary: Update Mapping
+      operationId: update_mapping_api_v1_deployments__dep_id__point_mapping__mapping_id__put
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: mapping_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Mapping Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointMappingIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointMappingOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Deployments 巡检方案
+      summary: Delete Mapping
+      operationId: delete_mapping_api_v1_deployments__dep_id__point_mapping__mapping_id__delete
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: mapping_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Mapping Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/deployments/{dep_id}/point-mapping/validate:
+    post:
+      tags:
+      - Deployments 巡检方案
+      summary: Validate Mappings
+      operationId: validate_mappings_api_v1_deployments__dep_id__point_mapping_validate_post
+      parameters:
+      - name: dep_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Dep Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/{robot_id}/discoveries:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: Discoveries
+      operationId: discoveries_api_v1_point_config_robots__robot_id__discoveries_get
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/{robot_id}/points/{nav_point_code}:
+    put:
+      tags:
+      - Navigation point configuration
+      summary: Assign
+      operationId: assign_api_v1_point_config_robots__robot_id__points__nav_point_code__put
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: nav_point_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Nav Point Code
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignmentIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Navigation point configuration
+      summary: Unassign
+      operationId: unassign_api_v1_point_config_robots__robot_id__points__nav_point_code__delete
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: nav_point_code
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Nav Point Code
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/{robot_id}/status:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: Status
+      operationId: status_api_v1_point_config_robots__robot_id__status_get
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/{robot_id}/publish:
+    post:
+      tags:
+      - Navigation point configuration
+      summary: Publish
+      operationId: publish_api_v1_point_config_robots__robot_id__publish_post
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/maps/{greenhouse_id}:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: Get Map
+      description: 返回地图文档：{revision, layout, points, defaults, next_name}（points 来自
+        inspection_points）。
+      operationId: get_map_api_v1_point_config_maps__greenhouse_id__get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Navigation point configuration
+      summary: Put Map
+      operationId: put_map_api_v1_point_config_maps__greenhouse_id__put
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapDocIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/maps/{greenhouse_id}/publish:
+    post:
+      tags:
+      - Navigation point configuration
+      summary: Publish Map
+      description: '把当前 layout/defaults/points 快照写入 map_versions（version = max+1）。
+
+
+        发布后不可变：没有任何修改/删除接口，GET 只读取。'
+      operationId: publish_map_api_v1_point_config_maps__greenhouse_id__publish_post
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/maps/{greenhouse_id}/versions:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: List Map Versions
+      operationId: list_map_versions_api_v1_point_config_maps__greenhouse_id__versions_get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/maps/{greenhouse_id}/versions/{version}:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: Get Map Version
+      operationId: get_map_version_api_v1_point_config_maps__greenhouse_id__versions__version__get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/{robot_id}/map-version:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: Get Robot Map Version
+      description: 平台侧登记的期望地图版本 + 回传版本 + 未闭环的告警。
+      operationId: get_robot_map_version_api_v1_point_config_robots__robot_id__map_version_get
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Navigation point configuration
+      summary: Register Robot Map Version
+      description: 平台登记该机器人应当使用的地图版本（期望值）。
+      operationId: register_robot_map_version_api_v1_point_config_robots__robot_id__map_version_put
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RobotMapVersionIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/map-alerts/{alert_id}/resolve:
+    post:
+      tags:
+      - Navigation point configuration
+      summary: Resolve Map Alert
+      description: 人工闭环地图版本告警。**不自动改任何设备配置。**
+      operationId: resolve_map_alert_api_v1_point_config_robots_map_alerts__alert_id__resolve_post
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      - name: synced
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Synced
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/maps/{greenhouse_id}/points/{point_id}/binding:
+    put:
+      tags:
+      - Navigation point configuration
+      summary: Bind Point
+      description: 按稳定点位 id 关联/解除机器人导航编号。
+      operationId: bind_point_api_v1_point_config_maps__greenhouse_id__points__point_id__binding_put
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: point_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Point Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindingIn2'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/map-monitor/{robot_id}:
+    get:
+      tags:
+      - Navigation point configuration
+      summary: Map Monitor
+      description: 地图监控：机器人配置状态 + 绑定关系 + 最新位置 + 近期到点记录（只读）。
+      operationId: map_monitor_api_v1_point_config_map_monitor__robot_id__get
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/point-config/robots/{robot_id}/reset-discovery:
+    post:
+      tags:
+      - Navigation point configuration
+      summary: Reset Discovery
+      description: 清空该机器人的点位发现记录，重新进入发现阶段。
+      operationId: reset_discovery_api_v1_point_config_robots__robot_id__reset_discovery_post
+      parameters:
+      - name: robot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Robot Id
+      - name: purge_configs
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Purge Configs
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/inspection-batches:
+    get:
+      tags:
+      - Automatic inspection batches
+      summary: List Batches
+      operationId: list_batches_api_v1_inspection_batches_get
+      parameters:
+      - name: robot_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Robot Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/inspection-batches/{batch_id}:
+    get:
+      tags:
+      - Automatic inspection batches
+      summary: Get Batch
+      operationId: get_batch_api_v1_inspection_batches__batch_id__get
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Batch Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/inspection-batches/{batch_id}/route-label:
+    put:
+      tags:
+      - Automatic inspection batches
+      summary: Set Route Label
+      operationId: set_route_label_api_v1_inspection_batches__batch_id__route_label_put
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Batch Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteLabelIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workbench/greenhouses:
+    post:
+      tags:
+      - Workbench 大棚工作台
+      summary: Create Workbench Greenhouse
+      operationId: create_workbench_greenhouse_api_v1_workbench_greenhouses_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkbenchCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workbench/greenhouses/{greenhouse_id}:
+    get:
+      tags:
+      - Workbench 大棚工作台
+      summary: Get Workbench Greenhouse
+      operationId: get_workbench_greenhouse_api_v1_workbench_greenhouses__greenhouse_id__get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workbench/greenhouses/{greenhouse_id}/profile:
+    put:
+      tags:
+      - Workbench 大棚工作台
+      summary: Update Workbench Profile
+      operationId: update_workbench_profile_api_v1_workbench_greenhouses__greenhouse_id__profile_put
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkbenchProfileUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workbench/greenhouses/{greenhouse_id}/points/{point_id}:
+    get:
+      tags:
+      - Workbench 大棚工作台
+      summary: Get Workbench Point
+      operationId: get_workbench_point_api_v1_workbench_greenhouses__greenhouse_id__points__point_id__get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: point_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Point Id
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 7
+          title: Days
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/photo-catalog:
+    get:
+      tags:
+      - PhotoCatalog 照片归档
+      summary: List Photo Catalog
+      operationId: list_photo_catalog_api_v1_photo_catalog_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: point_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Point Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 24
+          title: Page Size
+      - name: start
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ISO 时间，只看该时刻之后采集的照片
+          title: Start
+        description: ISO 时间，只看该时刻之后采集的照片
+      - name: include_unassigned
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: 是否包含无法解析点位的照片
+          default: false
+          title: Include Unassigned
+        description: 是否包含无法解析点位的照片
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/photo-catalog/options:
+    get:
+      tags:
+      - PhotoCatalog 照片归档
+      summary: Photo Catalog Options
+      description: 筛选下拉选项：可见大棚 + 该大棚下已归档的点位。
+      operationId: photo_catalog_options_api_v1_photo_catalog_options_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/photo-catalog/tasks/{task_id}/evidence:
+    get:
+      tags:
+      - PhotoCatalog 照片归档
+      summary: List Task Evidence
+      description: 某次巡检任务留存的证据（含 point_id 为 NULL 的待确认项）。
+      operationId: list_task_evidence_api_v1_photo_catalog_tasks__task_id__evidence_get
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Task Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/incidents/state-machine:
+    get:
+      tags:
+      - Incidents 异常事件与告警
+      summary: Incident State Machine
+      operationId: incident_state_machine_api_v1_incidents_state_machine_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/incidents:
+    get:
+      tags:
+      - Incidents 异常事件与告警
+      summary: List Incidents
+      operationId: list_incidents_api_v1_incidents_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Incidents 异常事件与告警
+      summary: Create Incident
+      operationId: create_incident_api_v1_incidents_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentCreateIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/incidents/{incident_id}:
+    get:
+      tags:
+      - Incidents 异常事件与告警
+      summary: Get Incident
+      operationId: get_incident_api_v1_incidents__incident_id__get
+      parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Incident Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/incidents/{incident_id}/status:
+    post:
+      tags:
+      - Incidents 异常事件与告警
+      summary: Move Incident Status
+      description: 按状态机流转；非法流转 400。
+      operationId: move_incident_status_api_v1_incidents__incident_id__status_post
+      parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Incident Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentMoveIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts:
+    post:
+      tags:
+      - Incidents 异常事件与告警
+      summary: Raise Alert
+      operationId: raise_alert_api_v1_alerts_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertCreateIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Incidents 异常事件与告警
+      summary: List Alerts
+      operationId: list_alerts_api_v1_alerts_get
+      parameters:
+      - name: active_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Active Only
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/clear:
+    post:
+      tags:
+      - Incidents 异常事件与告警
+      summary: Clear Alert
+      description: 环境恢复 → 告警停止。**默认不关闭事件单**（两者刻意分开）。
+      operationId: clear_alert_api_v1_alerts__alert_id__clear_post
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      - name: reason
+        in: query
+        required: false
+        schema:
+          type: string
+          default: environment_recovered
+          title: Reason
+      - name: auto_close_incident
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Auto Close Incident
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/freshness/devices:
+    get:
+      tags:
+      - Freshness 数据新鲜度
+      summary: Device Freshness
+      description: 各设备最新一条数据的新鲜度（查询时计算）。
+      operationId: device_freshness_api_v1_freshness_devices_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: max_age_seconds
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 86400
+          minimum: 1
+          default: 900
+          title: Max Age Seconds
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/freshness/greenhouses/{greenhouse_id}:
+    get:
+      tags:
+      - Freshness 数据新鲜度
+      summary: Greenhouse Freshness
+      description: 某大棚最新一条遥测的新鲜度。
+      operationId: greenhouse_freshness_api_v1_freshness_greenhouses__greenhouse_id__get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/bindings:
+    get:
+      tags:
+      - Bindings 设备绑定
+      summary: List Bindings
+      operationId: list_bindings_api_v1_devices__device_id__bindings_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Bindings 设备绑定
+      summary: Add Binding
+      operationId: add_binding_api_v1_devices__device_id__bindings_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindingIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/bindings/{binding_id}/end:
+    post:
+      tags:
+      - Bindings 设备绑定
+      summary: Close Binding
+      description: 结束绑定：写 end_at，保留历史（补传归属判定依赖这些历史）。
+      operationId: close_binding_api_v1_devices_bindings__binding_id__end_post
+      parameters:
+      - name: binding_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Binding Id
+      - name: at
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: At
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/maintenance/recover:
+    post:
+      tags:
+      - Maintenance 运维兜底
+      summary: Run Recovery
+      description: 把长时间停留在 running 的任务/批次兜底标记，避免永久卡在执行中。
+      operationId: run_recovery_api_v1_maintenance_recover_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/maintenance/recovery-policy:
+    get:
+      tags:
+      - Maintenance 运维兜底
+      summary: Recovery Policy
+      operationId: recovery_policy_api_v1_maintenance_recovery_policy_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/state-machine:
+    get:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Command State Machine
+      operationId: command_state_machine_api_v1_actuator_commands_state_machine_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands:
+    get:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: List Commands
+      operationId: list_commands_api_v1_actuator_commands_get
+      parameters:
+      - name: device_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Create Command
+      operationId: create_command_api_v1_actuator_commands_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandCreateIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/{command_id}/send:
+    post:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Mark Sent
+      description: pending → sent。默认**不**真正下发 MQTT（publish=true 才下发）。
+      operationId: mark_sent_api_v1_actuator_commands__command_id__send_post
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Command Id
+      - name: publish
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Publish
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/{command_id}/ack:
+    post:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Ack Command
+      description: 设备回执"已收到"（sent → accepted）。**这只是 ACK，不是执行结果。**
+      operationId: ack_command_api_v1_actuator_commands__command_id__ack_post
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Command Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/{command_id}/result:
+    post:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Report Result
+      description: 上报真实执行结果（accepted/executing → executed|failed|timeout）。
+      operationId: report_result_api_v1_actuator_commands__command_id__result_post
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Command Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandResultIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/{command_id}:
+    get:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Get Command
+      operationId: get_command_api_v1_actuator_commands__command_id__get
+      parameters:
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Command Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/capabilities:
+    get:
+      tags:
+      - AI 受控接口与指标定义
+      summary: Ai Capabilities
+      description: 对外声明 AI 的能力边界，便于联调与验收。
+      operationId: ai_capabilities_api_v1_ai_capabilities_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/advice:
+    post:
+      tags:
+      - AI 受控接口与指标定义
+      summary: Ai Advice
+      operationId: ai_advice_api_v1_ai_advice_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdviceIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/advice/logs:
+    get:
+      tags:
+      - AI 受控接口与指标定义
+      summary: Ai Advice Logs
+      operationId: ai_advice_logs_api_v1_ai_advice_logs_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/metric-definitions:
+    get:
+      tags:
+      - AI 受控接口与指标定义
+      summary: List Metric Definitions
+      operationId: list_metric_definitions_api_v1_metric_definitions_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - AI 受控接口与指标定义
+      summary: Create Metric Definition
+      operationId: create_metric_definition_api_v1_metric_definitions_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Payload
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/planting-batches:
+    get:
+      tags:
+      - PlantingBatches 种植批次
+      summary: List Batches
+      operationId: list_batches_api_v1_planting_batches_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - PlantingBatches 种植批次
+      summary: Create Batch
+      operationId: create_batch_api_v1_planting_batches_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlantingBatchIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/planting-batches/{batch_id}:
+    get:
+      tags:
+      - PlantingBatches 种植批次
+      summary: Get Batch
+      operationId: get_batch_api_v1_planting_batches__batch_id__get
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Batch Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/planting-batches/{batch_id}/status:
+    post:
+      tags:
+      - PlantingBatches 种植批次
+      summary: Move Status
+      operationId: move_status_api_v1_planting_batches__batch_id__status_post
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Batch Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlantingBatchStatusIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/reports/telemetry:
+    get:
+      tags:
+      - Reports 报表导出
+      summary: Export Telemetry
+      operationId: export_telemetry_api_v1_reports_telemetry_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 720
+          minimum: 1
+          default: 24
+          title: Hours
+      - name: fmt
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(json|csv)$
+          default: json
+          title: Fmt
+      - name: company_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 仅平台运营可用
+          title: Company Id
+        description: 仅平台运营可用
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/reports/telemetry/summary:
+    get:
+      tags:
+      - Reports 报表导出
+      summary: Telemetry Summary
+      description: 按大棚汇总窗口内的记录数与最新值（同样限定公司范围）。
+      operationId: telemetry_summary_api_v1_reports_telemetry_summary_get
+      parameters:
+      - name: greenhouse_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+      - name: hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 720
+          minimum: 1
+          default: 24
+          title: Hours
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    AdviceIn:
+      properties:
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        hours:
+          type: integer
+          maximum: 72.0
+          minimum: 1.0
+          title: Hours
+          default: 1
+        metrics:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Metrics
+      type: object
+      required:
+      - greenhouse_id
+      title: AdviceIn
+    AlertCreateIn:
+      properties:
+        rule_code:
+          type: string
+          maxLength: 60
+          minLength: 1
+          title: Rule Code
+        incident_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Incident Id
+        metric:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Metric
+        value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Value
+        threshold:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Threshold
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+      type: object
+      required:
+      - rule_code
+      title: AlertCreateIn
+    AssignmentIn:
+      properties:
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        point_name:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Point Name
+        sample_seconds:
+          type: integer
+          maximum: 120.0
+          minimum: 1.0
+          title: Sample Seconds
+          default: 10
+        collect_soil:
+          type: boolean
+          title: Collect Soil
+          default: true
+        collect_environment:
+          type: boolean
+          title: Collect Environment
+          default: true
+        take_photo:
+          type: boolean
+          title: Take Photo
+          default: true
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        note:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - greenhouse_id
+      - point_name
+      title: AssignmentIn
+    BindingIn:
+      properties:
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        point_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Point Id
+        channel:
+          type: string
+          maxLength: 50
+          title: Channel
+          default: default
+        binding_version:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Binding Version
+        start_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Start At
+        end_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: End At
+      type: object
+      required:
+      - greenhouse_id
+      title: BindingIn
+    BindingIn2:
+      properties:
+        revision:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Revision
+        robot_id:
+          type: string
+          maxLength: 100
+          title: Robot Id
+        robot_map_version:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Robot Map Version
+        nav_point_code:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Nav Point Code
+      type: object
+      required:
+      - robot_id
+      title: BindingIn2
+    Body_upload_image_api_v1_images_upload__device_id__post:
+      properties:
+        file:
+          type: string
+          format: binary
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_image_api_v1_images_upload__device_id__post
+    Body_upload_images_batch_api_v1_images_upload_batch__device_id__post:
+      properties:
+        files:
+          items:
+            type: string
+            format: binary
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_upload_images_batch_api_v1_images_upload_batch__device_id__post
+    CommandCreateIn:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        action:
+          type: string
+          maxLength: 50
+          minLength: 1
+          title: Action
+        params:
+          type: object
+          title: Params
+        desired_state:
+          type: object
+          title: Desired State
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Reason
+        ttl_seconds:
+          type: integer
+          maximum: 86400.0
+          minimum: 10.0
+          title: Ttl Seconds
+          default: 300
+      type: object
+      required:
+      - device_id
+      - action
+      title: CommandCreateIn
+    CommandResultIn:
+      properties:
+        status:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Status
+        actual_state:
+          type: object
+          title: Actual State
+        error_message:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Error Message
+      type: object
+      required:
+      - status
+      title: CommandResultIn
+    DeploymentCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        greenhouses:
+          items:
+            type: string
+          type: array
+          title: Greenhouses
+          default: []
+        tasks:
+          items:
+            type: object
+          type: array
+          title: Tasks
+          default: []
+        patrol_speed:
+          type: number
+          title: Patrol Speed
+          default: 0.5
+        capture_interval:
+          type: integer
+          title: Capture Interval
+          default: 5
+        return_battery_threshold:
+          type: integer
+          title: Return Battery Threshold
+          default: 20
+        auto_patrol:
+          type: boolean
+          title: Auto Patrol
+          default: false
+      type: object
+      required:
+      - name
+      title: DeploymentCreate
+    DeploymentOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        status:
+          type: string
+          title: Status
+        version:
+          type: integer
+          title: Version
+        config_version:
+          type: integer
+          title: Config Version
+        published_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Published At
+        config:
+          type: object
+          title: Config
+        point_mappings:
+          items:
+            $ref: '#/components/schemas/PointMappingOut'
+          type: array
+          title: Point Mappings
+          default: []
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - device_id
+      - status
+      - version
+      - config_version
+      - published_at
+      - config
+      - created_at
+      title: DeploymentOut
+    DeviceCommand:
+      properties:
+        command:
+          type: string
+          title: Command
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        params:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Params
+        task:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Task
+      type: object
+      required:
+      - command
+      title: DeviceCommand
+    DeviceCreate:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        name:
+          type: string
+          title: Name
+        device_type:
+          $ref: '#/components/schemas/DeviceTypeEnum'
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        firmware_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Firmware Version
+        config:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Config
+      type: object
+      required:
+      - device_id
+      - name
+      - device_type
+      title: DeviceCreate
+    DeviceLogResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        device_id:
+          type: string
+          title: Device Id
+        level:
+          type: string
+          title: Level
+        event:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        meta_data:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Meta Data
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - device_id
+      - level
+      title: DeviceLogResponse
+    DeviceResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        device_id:
+          type: string
+          title: Device Id
+        name:
+          type: string
+          title: Name
+        device_type:
+          $ref: '#/components/schemas/DeviceTypeEnum'
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        firmware_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Firmware Version
+        status:
+          $ref: '#/components/schemas/DeviceStatusEnum'
+        last_seen:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Seen
+        config:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Config
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        is_online:
+          type: boolean
+          title: Is Online
+          default: false
+        mqtt_topics:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Mqtt Topics
+      type: object
+      required:
+      - id
+      - device_id
+      - name
+      - device_type
+      - status
+      title: DeviceResponse
+    DeviceStatusEnum:
+      type: string
+      enum:
+      - online
+      - offline
+      - error
+      - maintenance
+      title: DeviceStatusEnum
+    DeviceTypeEnum:
+      type: string
+      enum:
+      - robot
+      - sensor
+      - irrigation
+      - fan
+      - grow_light
+      - curtain
+      - fertilizer
+      - camera
+      title: DeviceTypeEnum
+    DeviceUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        firmware_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Firmware Version
+        config:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Config
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/DeviceStatusEnum'
+          - type: 'null'
+      type: object
+      title: DeviceUpdate
+    GreenhouseCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        location:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location
+        area:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Area
+        crop_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Crop Type
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        map_data:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Map Data
+      type: object
+      required:
+      - name
+      title: GreenhouseCreate
+    GreenhouseMapConfig:
+      properties:
+        width:
+          type: number
+          title: Width
+          default: 100.0
+        height:
+          type: number
+          title: Height
+          default: 60.0
+        waypoints:
+          items:
+            $ref: '#/components/schemas/WaypointConfig'
+          type: array
+          title: Waypoints
+          default: []
+        sensor_positions:
+          items:
+            type: object
+          type: array
+          title: Sensor Positions
+          default: []
+      type: object
+      title: GreenhouseMapConfig
+    GreenhouseResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        location:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location
+        area:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Area
+        crop_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Crop Type
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        map_data:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Map Data
+        is_active:
+          type: boolean
+          title: Is Active
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - is_active
+      title: GreenhouseResponse
+    GreenhouseUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        location:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location
+        area:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Area
+        crop_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Crop Type
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        map_data:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Map Data
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Active
+      type: object
+      title: GreenhouseUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ImageResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        device_id:
+          type: string
+          title: Device Id
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        point_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Point Id
+        map_version_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Map Version Id
+        filename:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filename
+        storage_url:
+          type: string
+          title: Storage Url
+        thumbnail_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Thumbnail Url
+        file_size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: File Size
+        position_x:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Position X
+        position_y:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Position Y
+        tags:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Tags
+        captured_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Captured At
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - device_id
+      - storage_url
+      title: ImageResponse
+    IncidentCreateIn:
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Title
+        category:
+          type: string
+          maxLength: 40
+          title: Category
+          default: environment
+        severity:
+          type: string
+          maxLength: 20
+          title: Severity
+          default: warning
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        source:
+          type: string
+          maxLength: 30
+          title: Source
+          default: manual
+        payload:
+          type: object
+          title: Payload
+        note:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - title
+      title: IncidentCreateIn
+    IncidentMoveIn:
+      properties:
+        status:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Status
+        note:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - status
+      title: IncidentMoveIn
+    LoginIn:
+      properties:
+        username:
+          type: string
+          title: Username
+        password:
+          type: string
+          title: Password
+      type: object
+      required:
+      - username
+      - password
+      title: LoginIn
+    MQTTConfig:
+      properties:
+        broker_host:
+          type: string
+          title: Broker Host
+        broker_port:
+          type: integer
+          title: Broker Port
+          default: 1883
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+        password:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Password
+        topic_prefix:
+          type: string
+          title: Topic Prefix
+          default: agri
+        keepalive:
+          type: integer
+          title: Keepalive
+          default: 60
+      type: object
+      required:
+      - broker_host
+      title: MQTTConfig
+    MapDocIn:
+      properties:
+        revision:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Revision
+        layout:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Layout
+        defaults:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Defaults
+        next_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Name
+        points:
+          items:
+            type: object
+          type: array
+          title: Points
+        structure:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Structure
+        covering:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Covering
+      type: object
+      title: MapDocIn
+    PatrolConfigOut:
+      properties:
+        device_id:
+          type: string
+          title: Device Id
+        robot_name:
+          type: string
+          title: Robot Name
+        patrol_greenhouses:
+          items:
+            $ref: '#/components/schemas/PatrolGreenhouseOut'
+          type: array
+          title: Patrol Greenhouses
+          default: []
+        patrol_speed:
+          type: number
+          title: Patrol Speed
+          default: 0.5
+        capture_interval:
+          type: integer
+          title: Capture Interval
+          default: 5
+        return_battery_threshold:
+          type: integer
+          title: Return Battery Threshold
+          default: 20
+        auto_patrol:
+          type: boolean
+          title: Auto Patrol
+          default: false
+      type: object
+      required:
+      - device_id
+      - robot_name
+      title: PatrolConfigOut
+    PatrolGreenhouseIn:
+      properties:
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        priority:
+          type: integer
+          title: Priority
+          default: 1
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        repeat_interval_min:
+          type: integer
+          title: Repeat Interval Min
+          default: 60
+      type: object
+      required:
+      - greenhouse_id
+      title: PatrolGreenhouseIn
+    PatrolGreenhouseOut:
+      properties:
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        priority:
+          type: integer
+          title: Priority
+          default: 1
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        repeat_interval_min:
+          type: integer
+          title: Repeat Interval Min
+          default: 60
+        greenhouse_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Name
+        greenhouse_crop:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Crop
+        waypoint_count:
+          type: integer
+          title: Waypoint Count
+          default: 0
+      type: object
+      required:
+      - greenhouse_id
+      title: PatrolGreenhouseOut
+    PlantingBatchIn:
+      properties:
+        code:
+          type: string
+          maxLength: 60
+          minLength: 1
+          title: Code
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        zone:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Zone
+        crop_type:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Crop Type
+        variety:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Variety
+        area:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Area
+        planted_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Planted At
+        expected_harvest_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expected Harvest At
+        note:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - code
+      - greenhouse_id
+      - crop_type
+      title: PlantingBatchIn
+    PlantingBatchStatusIn:
+      properties:
+        status:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Status
+        note:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - status
+      title: PlantingBatchStatusIn
+    PointMappingIn:
+      properties:
+        chassis_point:
+          type: string
+          title: Chassis Point
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        greenhouse_point:
+          type: string
+          title: Greenhouse Point
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      type: object
+      required:
+      - chassis_point
+      - greenhouse_id
+      - greenhouse_point
+      title: PointMappingIn
+    PointMappingOut:
+      properties:
+        chassis_point:
+          type: string
+          title: Chassis Point
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        greenhouse_point:
+          type: string
+          title: Greenhouse Point
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        id:
+          type: string
+          title: Id
+        mapping_id:
+          type: string
+          title: Mapping Id
+          default: ''
+        greenhouse_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Name
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - chassis_point
+      - greenhouse_id
+      - greenhouse_point
+      - id
+      title: PointMappingOut
+    PublishIn:
+      properties:
+        mode:
+          type: string
+          pattern: ^(discovery|operational)$
+          title: Mode
+      type: object
+      required:
+      - mode
+      title: PublishIn
+    RobotConfig:
+      properties:
+        patrol_speed:
+          type: number
+          title: Patrol Speed
+          default: 0.5
+        capture_interval:
+          type: integer
+          title: Capture Interval
+          default: 5
+        return_battery_threshold:
+          type: integer
+          title: Return Battery Threshold
+          default: 20
+        auto_patrol:
+          type: boolean
+          title: Auto Patrol
+          default: false
+        patrol_waypoints:
+          items:
+            $ref: '#/components/schemas/WaypointConfig'
+          type: array
+          title: Patrol Waypoints
+          default: []
+      type: object
+      title: RobotConfig
+    RobotMapVersionIn:
+      properties:
+        map_version:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Map Version
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        note:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - map_version
+      title: RobotMapVersionIn
+    RobotTaskCreate:
+      properties:
+        task_name:
+          type: string
+          title: Task Name
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          default: inspection
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        priority:
+          type: integer
+          maximum: 10.0
+          minimum: 1.0
+          title: Priority
+          default: 5
+        scheduled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Scheduled At
+        waypoints:
+          items:
+            $ref: '#/components/schemas/Waypoint'
+          type: array
+          title: Waypoints
+          default: []
+        actions:
+          items:
+            $ref: '#/components/schemas/TaskAction'
+          type: array
+          title: Actions
+          default: []
+        task_config:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Task Config
+          default: {}
+      type: object
+      required:
+      - task_name
+      - greenhouse_id
+      title: RobotTaskCreate
+    RobotTaskResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        task_name:
+          type: string
+          title: Task Name
+        task_type:
+          $ref: '#/components/schemas/TaskTypeEnum'
+        greenhouse_id:
+          type: string
+          title: Greenhouse Id
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        status:
+          $ref: '#/components/schemas/TaskStatusEnum'
+        priority:
+          type: integer
+          title: Priority
+        scheduled_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Scheduled At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        waypoints:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Waypoints
+        actions:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Actions
+        progress:
+          type: integer
+          title: Progress
+        result:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Result
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - task_name
+      - task_type
+      - greenhouse_id
+      - status
+      - priority
+      - progress
+      title: RobotTaskResponse
+    RobotTaskUpdate:
+      properties:
+        task_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Name
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/TaskStatusEnum'
+          - type: 'null'
+        device_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device Id
+        priority:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Priority
+        progress:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Progress
+        result:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Result
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+      type: object
+      title: RobotTaskUpdate
+    RouteLabelIn:
+      properties:
+        label:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Label
+      type: object
+      title: RouteLabelIn
+    SystemConfig:
+      properties:
+        platform_name:
+          type: string
+          title: Platform Name
+          default: Smart Greenhouse Platform
+        data_retention_days:
+          type: integer
+          title: Data Retention Days
+          default: 30
+        alert_temperature_max:
+          type: number
+          title: Alert Temperature Max
+          default: 35.0
+        alert_temperature_min:
+          type: number
+          title: Alert Temperature Min
+          default: 10.0
+        alert_humidity_max:
+          type: number
+          title: Alert Humidity Max
+          default: 90.0
+        alert_co2_max:
+          type: number
+          title: Alert Co2 Max
+          default: 1000.0
+        upload_max_size_mb:
+          type: integer
+          title: Upload Max Size Mb
+          default: 20
+      type: object
+      title: SystemConfig
+    TaskAction:
+      properties:
+        type:
+          type: string
+          title: Type
+        params:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Params
+      type: object
+      required:
+      - type
+      title: TaskAction
+    TaskStatusEnum:
+      type: string
+      enum:
+      - pending
+      - running
+      - paused
+      - completed
+      - partial
+      - failed
+      - cancelled
+      title: TaskStatusEnum
+      description: M2 巡检任务状态机（流转规则见 app/core/task_state.py）。
+    TaskStatusIn:
+      properties:
+        status:
+          type: string
+          maxLength: 20
+          minLength: 1
+          title: Status
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - status
+      title: TaskStatusIn
+    TaskTypeEnum:
+      type: string
+      enum:
+      - inspection
+      - watering
+      - fertilizing
+      - pest_detection
+      title: TaskTypeEnum
+    TelemetryResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        device_id:
+          type: string
+          title: Device Id
+        greenhouse_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Greenhouse Id
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+        data_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Data Type
+        temperature:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Temperature
+        humidity:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Humidity
+        soil_moisture:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Soil Moisture
+        soil_temperature:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Soil Temperature
+        soil_ec:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Soil Ec
+        ph_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ph Value
+        soil_nitrogen:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Soil Nitrogen
+        soil_phosphorus:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Soil Phosphorus
+        soil_potassium:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Soil Potassium
+        sample_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sample Count
+        task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Task Id
+        light_intensity:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Light Intensity
+        co2_level:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Co2 Level
+        battery_level:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Battery Level
+        position_x:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Position X
+        position_y:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Position Y
+        robot_status:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Robot Status
+        raw_data:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Raw Data
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - device_id
+      - timestamp
+      title: TelemetryResponse
+    UserCreate:
+      properties:
+        username:
+          type: string
+          title: Username
+        password:
+          type: string
+          title: Password
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        role:
+          allOf:
+          - $ref: '#/components/schemas/UserRole'
+          default: viewer
+      type: object
+      required:
+      - username
+      - password
+      title: UserCreate
+    UserOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        username:
+          type: string
+          title: Username
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        is_active:
+          type: boolean
+          title: Is Active
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - username
+      - email
+      - role
+      - is_active
+      - created_at
+      title: UserOut
+    UserRole:
+      type: string
+      enum:
+      - super_admin
+      - admin
+      - operator
+      - viewer
+      title: UserRole
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    Waypoint:
+      properties:
+        x:
+          type: number
+          title: X
+        y:
+          type: number
+          title: Y
+        z:
+          type: number
+          title: Z
+          default: 0.0
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        actions:
+          items:
+            type: string
+          type: array
+          title: Actions
+          default: []
+      type: object
+      required:
+      - x
+      - y
+      title: Waypoint
+    WaypointConfig:
+      properties:
+        id:
+          type: integer
+          title: Id
+        x:
+          type: number
+          title: X
+        y:
+          type: number
+          title: Y
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        actions:
+          items:
+            type: string
+          type: array
+          title: Actions
+          default: []
+      type: object
+      required:
+      - id
+      - x
+      - y
+      title: WaypointConfig
+    WaypointIn:
+      properties:
+        x:
+          type: number
+          title: X
+        y:
+          type: number
+          title: Y
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        actions:
+          items:
+            type: string
+          type: array
+          title: Actions
+          default: []
+      type: object
+      required:
+      - x
+      - y
+      title: WaypointIn
+    WaypointOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        x:
+          type: number
+          title: X
+        y:
+          type: number
+          title: Y
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        actions:
+          items:
+            type: string
+          type: array
+          title: Actions
+          default: []
+      type: object
+      required:
+      - id
+      - x
+      - y
+      title: WaypointOut
+    WorkbenchCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Name
+        location:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Location
+        crop_type:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Crop Type
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        structure:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Structure
+          default: solar
+        covering:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Covering
+          default: film
+        actual_area:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Actual Area
+        coord_unit:
+          anyOf:
+          - type: string
+            maxLength: 20
+          - type: 'null'
+          title: Coord Unit
+          default: schematic
+        layout:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Layout
+        defaults:
+          anyOf:
+          - type: object
+          - type: 'null'
+          title: Defaults
+      type: object
+      required:
+      - name
+      title: WorkbenchCreate
+    WorkbenchProfileUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 1
+          - type: 'null'
+          title: Name
+        location:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Location
+        crop_type:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Crop Type
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        structure:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Structure
+        covering:
+          anyOf:
+          - type: string
+            maxLength: 40
+          - type: 'null'
+          title: Covering
+        actual_area:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Actual Area
+        revision:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Revision
+      type: object
+      title: WorkbenchProfileUpdate
