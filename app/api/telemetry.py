@@ -1,4 +1,5 @@
 # telemetry.py
+from app.api.auth import get_current_user
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -6,6 +7,8 @@ from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
+from app.core.company_scope import company_filter, is_platform
+from app.models.models import Greenhouse, User
 from app.models.models import Telemetry, Device
 from app.schemas.schemas import TelemetryResponse
 
@@ -18,7 +21,8 @@ async def list_telemetry(
     greenhouse_id: Optional[str] = Query(None),
     hours: int = Query(default=24, le=168),
     skip: int = 0, limit: int = 500,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     conditions = [Telemetry.created_at >= since]
@@ -29,9 +33,12 @@ async def list_telemetry(
             conditions.append(Telemetry.device_id == device.id)
     if greenhouse_id:
         conditions.append(Telemetry.greenhouse_id == greenhouse_id)
+    stmt = select(Telemetry).where(and_(*conditions))
+    if not is_platform(user):
+        stmt = stmt.join(Greenhouse, Telemetry.greenhouse_id == Greenhouse.id).where(
+            company_filter(user, Greenhouse.company_id))
     result = await db.execute(
-        select(Telemetry).where(and_(*conditions))
-        .order_by(Telemetry.timestamp.desc()).offset(skip).limit(limit)
+        stmt.order_by(Telemetry.timestamp.desc()).offset(skip).limit(limit)
     )
     return result.scalars().all()
 
