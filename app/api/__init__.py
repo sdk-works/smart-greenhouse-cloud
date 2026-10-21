@@ -13,7 +13,7 @@ from app.api import (
     greenhouses, devices, telemetry, tasks, images,
     dashboard, ws, settings_api, waypoints, robot_patrol,
     deployments, auth, point_configs, inspection_batches,
-    workbench, photo_catalog,
+    workbench, photo_catalog, incidents, freshness, bindings, maintenance,
 )
 from app.api.auth import get_current_user
 from app.core.redis import get_redis
@@ -51,6 +51,10 @@ _ROUTERS = [
     (inspection_batches.router, "/inspection-batches", "Automatic inspection batches",   True),
     (workbench.router,          "/workbench",          "Workbench 大棚工作台",            True),
     (photo_catalog.router,      "",                   "PhotoCatalog 照片归档",           True),
+    (incidents.router,          "",                   "Incidents 异常事件与告警",        True),
+    (freshness.router,          "",                   "Freshness 数据新鲜度",            True),
+    (bindings.router,           "",                   "Bindings 设备绑定",               True),
+    (maintenance.router,        "",                   "Maintenance 运维兜底",            True),
 ]
 
 for _r, _prefix, _tag, _secure in _ROUTERS:

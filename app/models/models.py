@@ -237,6 +237,10 @@ class Telemetry(Base):
     company_id          = Column(String(36), nullable=True, index=True)
     position_quality    = Column(String(20))
     attribution_status  = Column(String(20))
+    # M3：归属判定依据（binding_window / no_binding_history / outside_window ...）
+    attribution_reason  = Column(String(40))
+    binding_id          = Column(String(36))
+    binding_version     = Column(Integer)
     map_version_id      = Column(String(36))
     raw_message_id      = Column(String(36))
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
@@ -595,6 +599,58 @@ class RobotMapAlert(Base):
     detail                = Column(JSON)
     created_at            = Column(DateTime(timezone=True), server_default=func.now())
     resolved_at           = Column(DateTime(timezone=True))
+
+
+# ── 第三批：异常事件（告警 / 事件单） ─────────────────────────
+class Incident(Base):
+    """异常事件单。告警"停了"≠ 事件"关了"，两者刻意分开。"""
+    __tablename__ = "incidents"
+    id            = Column(String(36), primary_key=True, default=gen_uuid)
+    code          = Column(String(40), nullable=False, index=True)
+    title         = Column(String(200), nullable=False)
+    category      = Column(String(40), nullable=False, default="environment")
+    severity      = Column(String(20), nullable=False, default="warning")
+    status        = Column(String(20), nullable=False, default="pending_confirm", index=True)
+    source        = Column(String(30), nullable=False, default="auto")
+    greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)
+    device_id     = Column(String(36), ForeignKey("devices.id"), nullable=True, index=True)
+    company_id    = Column(String(36), nullable=True, index=True)
+    detected_at   = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    payload       = Column(JSON, default={})
+    note          = Column(Text)
+    created_by    = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class IncidentEvent(Base):
+    """事件单状态流转历史（每次流转留痕）。"""
+    __tablename__ = "incident_events"
+    id          = Column(String(36), primary_key=True, default=gen_uuid)
+    incident_id = Column(String(36), ForeignKey("incidents.id"), nullable=False, index=True)
+    from_status = Column(String(20))
+    to_status   = Column(String(20), nullable=False)
+    actor_id    = Column(String(36), ForeignKey("users.id"), nullable=True)
+    note        = Column(Text)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Alert(Base):
+    """告警（可因环境恢复而停止，但对应事件单仍需人工关闭）。"""
+    __tablename__ = "alerts"
+    id            = Column(String(36), primary_key=True, default=gen_uuid)
+    incident_id   = Column(String(36), ForeignKey("incidents.id"), nullable=True, index=True)
+    rule_code     = Column(String(60), nullable=False)
+    metric        = Column(String(50))
+    value         = Column(Float)
+    threshold     = Column(Float)
+    greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)
+    device_id     = Column(String(36), ForeignKey("devices.id"), nullable=True)
+    company_id    = Column(String(36), nullable=True, index=True)
+    raised_at     = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    cleared_at    = Column(DateTime(timezone=True))
+    clear_reason  = Column(String(40))
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class RawMessage(Base):

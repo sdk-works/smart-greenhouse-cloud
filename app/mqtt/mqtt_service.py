@@ -20,6 +20,7 @@ from sqlalchemy import select, text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.redis import CacheService, get_redis
+from app.core.attribution import resolve_attribution
 from app.core.photo_service import (
     greenhouse_company, latest_map_version, record_evidence, resolve_point,
 )
@@ -537,14 +538,24 @@ class MQTTService:
             device.status = DeviceStatus.ONLINE
             device.last_seen = datetime.now(timezone.utc)
 
-            greenhouse_id = device.greenhouse_id
+            # M3：按绑定窗口判定该时刻的归属。
+            # 补传场景用采样时间（时间可信时），否则用接收时间 —— 设备可能早已搬走。
+            attribution = await resolve_attribution(
+                db, device_id=device.id,
+                at=sampled_at if (time_quality and sampled_at) else received_at)
+            if attribution["status"] == "resolved":
+                greenhouse_id = attribution["greenhouse_id"] or device.greenhouse_id
+            else:
+                # 判定不了：写 pending，greenhouse_id 用设备当前所在大棚作兜底，
+                # 但状态明确标注为待确认，绝不冒充已确认
+                greenhouse_id = attribution["greenhouse_id"] or device.greenhouse_id
             gh_row = await db.get(Greenhouse, greenhouse_id) if greenhouse_id else None
             company_id = gh_row.company_id if gh_row else None
 
             # 契约 §3.2 顺序与字段映射
             t = Telemetry(
                 device_id        = device.id,
-                greenhouse_id    = device.greenhouse_id,
+                greenhouse_id    = greenhouse_id,
                 timestamp        = received_at,          # 服务器接收时间
                 sampled_at       = sampled_at,           # 采样时间，未知为 NULL
                 time_quality     = time_quality,
@@ -562,7 +573,10 @@ class MQTTService:
                 co2_level        = data.get("co2"),
                 ph_value         = data.get("ph"),
                 company_id       = company_id,
-                attribution_status = "resolved" if greenhouse_id else "pending",
+                attribution_status = attribution["status"],
+                attribution_reason = attribution["reason"],
+                binding_id       = attribution["binding_id"],
+                binding_version  = attribution["binding_version"],
                 raw_data         = payload,
             )
             db.add(t)

@@ -13,10 +13,11 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.core.redis import get_redis
 from app.models.models import (
-    AuditLog, Company, Device, DeviceStatus, DeviceType, Greenhouse, Image,
-    InspectionEvidence, InspectionPoint, MapVersion, RobotMapAlert,
-    RobotMapRegistry, RobotPointConfig, RobotPointMapping, RobotTask,
-    TaskStatus, TaskType, Telemetry, User,
+    Alert, AuditLog, Company, Device, DeviceBinding, DeviceStatus, DeviceType,
+    Greenhouse, Image, Incident, IncidentEvent, InspectionBatch,
+    InspectionEvidence, InspectionPoint, InspectionVisit, MapVersion,
+    RobotMapAlert, RobotMapRegistry, RobotPointConfig, RobotPointMapping,
+    RobotTask, TaskStatus, TaskType, Telemetry, User,
 )
 
 
@@ -30,6 +31,7 @@ class IsoFixture:
         self.tel_rows, self.images, self.tasks = [], [], []
         self.points, self.mappings, self.map_versions = [], [], []
         self.ev_rows, self.map_reg_rows, self.map_alerts = [], [], []
+        self.bindings, self.incidents, self.alerts, self.batches = [], [], [], []
         self.users, self.tokens = [], []
 
     # ── 基础对象 ─────────────────────────────────────────────
@@ -122,9 +124,56 @@ class IsoFixture:
         return a
 
 
+    # ── M3 对象 ──────────────────────────────────────────────
+    async def binding(self, db, dev, gh, point=None, channel="default",
+                      version=1, start_at=None, end_at=None):
+        b = DeviceBinding(id=str(uuid.uuid4()), device_id=dev.id,
+                          greenhouse_id=gh.id,
+                          point_id=point.id if point else None,
+                          channel=channel, binding_version=version,
+                          start_at=start_at or datetime.now(timezone.utc),
+                          end_at=end_at)
+        db.add(b); self.bindings.append(b.id); await db.flush()
+        return b
+
+    async def raw_telemetry(self, db, gh, dev, **kw):
+        t = Telemetry(id=str(uuid.uuid4()), device_id=dev.id, greenhouse_id=gh.id,
+                      **kw)
+        db.add(t); self.tel_rows.append(t.id); await db.flush()
+        return t
+
+    async def incident(self, db, gh, title="异常", status="pending_confirm",
+                       company_id=None):
+        inc = Incident(id=str(uuid.uuid4()), code=uid("INC"), title=title,
+                       category="environment", severity="warning", status=status,
+                       source="manual", greenhouse_id=gh.id if gh else None,
+                       company_id=company_id)
+        db.add(inc); self.incidents.append(inc.id); await db.flush()
+        return inc
+
+    async def alert(self, db, incident=None, gh=None, rule="r1",
+                    company_id=None):
+        a = Alert(id=str(uuid.uuid4()), incident_id=incident.id if incident else None,
+                  rule_code=rule, greenhouse_id=gh.id if gh else None,
+                  metric="temperature", value=40.0, threshold=35.0,
+                  company_id=company_id)
+        db.add(a); self.alerts.append(a.id); await db.flush()
+        return a
+
+    async def batch(self, db, robot_id, status="running", last_event_at=None):
+        from app.models.models import InspectionBatch
+        b = InspectionBatch(id=str(uuid.uuid4()), robot_id=robot_id, status=status,
+                             started_at=datetime.now(timezone.utc),
+                             last_event_at=last_event_at or datetime.now(timezone.utc))
+        db.add(b); self.batches.append(b.id); await db.flush()
+        return b
+
+
 # 删除顺序：子表在前、父表在后，且每一层单独提交，
 # 免得 ORM 的批量排序（依赖信息不全时不可靠）把父表删到子表前面。
 _WIPE_ORDER = (
+    (Alert,             "alerts"),
+    (Incident,          "incidents"),
     (InspectionEvidence, "ev_rows"),
     (Image,             "images"),
     (RobotTask,         "tasks"),
@@ -135,13 +184,27 @@ _WIPE_ORDER = (
     (MapVersion,        "map_versions"),
     (RobotMapRegistry,  "map_reg_rows"),
     (RobotMapAlert,     "map_alerts"),
+    (DeviceBinding,      "bindings"),
     (Device,            "devices"),
+    (InspectionBatch,   "batches"),
     (Greenhouse,        "greenhouses"),
 )
 
 
 async def _cleanup(fx: IsoFixture):
     async with AsyncSessionLocal() as db:
+        # 没有 greenhouse_id 的子表，按父 id 先清
+        if fx.incidents:
+            for r in (await db.execute(select(IncidentEvent).where(
+                    IncidentEvent.incident_id.in_(fx.incidents)))).scalars().all():
+                await db.delete(r)
+            await db.commit()
+        if fx.batches:
+            for r in (await db.execute(select(InspectionVisit).where(
+                    InspectionVisit.batch_id.in_(fx.batches)))).scalars().all():
+                await db.delete(r)
+            await db.commit()
+
         for model, attr in _WIPE_ORDER:
             ids = list(getattr(fx, attr)) if attr else []
             ghs = list(fx.greenhouses) if hasattr(model, "greenhouse_id") else []
