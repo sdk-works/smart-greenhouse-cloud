@@ -205,6 +205,7 @@ _WIPE_ORDER = (
     (InspectionEvidence, "ev_rows"),
     (Image,             "images"),
     (RobotTask,         "tasks"),
+    (InspectionVisit,   None),
     (Telemetry,         "tel_rows"),
     (RobotPointMapping, "mappings"),
     (RobotPointConfig,  None),

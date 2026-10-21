@@ -644,6 +644,11 @@ class MQTTService:
             data         = _safe(payload.get("data"))
             robot_status = _safe(payload.get("robot_status"))
             pm           = self._validate_point_mapping(payload)
+            # M3：补传归属按绑定窗口判定（设备可能早已搬走/改绑）
+            sample_ts = _parse_ts(payload.get("sampled_at")) \
+                if payload.get("sampled_at") else None
+            attribution = await resolve_attribution(
+                db, device_id=device.id, at=sample_ts or ts)
 
             greenhouse_id = (
                 pm["greenhouse_id"] if pm
@@ -654,6 +659,9 @@ class MQTTService:
                 device_id        = device.id,
                 greenhouse_id    = greenhouse_id,
                 timestamp        = ts,
+                # 契约 v1 §1：采样时间未知存 NULL，绝不拿接收时间冒充
+                sampled_at       = sample_ts,
+                time_quality     = int(payload.get("time_quality", 0) or 0),
                 msg_id           = payload.get("msg_id"),
                 data_type        = "telemetry",
                 temperature      = data.get("temperature"),
@@ -677,6 +685,12 @@ class MQTTService:
                 greenhouse_point = pm["greenhouse_point"] if pm else None,
                 mapping_id       = pm.get("mapping_id")  if pm else None,
                 raw_data         = payload,
+                # M1：遥测必须带上公司归属，否则查询侧无法隔离
+                company_id       = await greenhouse_company(db, greenhouse_id),
+                attribution_status = attribution["status"],
+                attribution_reason = attribution["reason"],
+                binding_id       = attribution["binding_id"],
+                binding_version  = attribution["binding_version"],
             )
             db.add(t)
             await db.flush()
