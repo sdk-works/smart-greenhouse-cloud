@@ -34,6 +34,17 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("✅ 数据库初始化完成")
 
+    # M3：启动时把长时间停留在 running 的任务/批次做兜底标记（只标记，不假装知道结果）
+    try:
+        from app.core.database import AsyncSessionLocal as _SessionLocal
+        from app.core.recovery import recover_all as _recover_all
+        async with _SessionLocal() as _db:
+            res = await _recover_all(_db)
+        if res["tasks_recovered"] or res["batches_recovered"]:
+            logger.warning(f"⚠️ 启动恢复：兜底标记 {res}")
+    except Exception as e:
+        logger.error(f"[RECOVERY] 启动恢复失败（不影响服务启动）: {e}")
+
     # ── 夜间只读实例守卫 ──────────────────────────────────────
     # NIGHTLY_READONLY=1 时本实例不得接入 MQTT、不得启动任何后台任务，
     # 仅用于 worktree 内起临时实例跑接口/测试。
