@@ -14,6 +14,7 @@ from app.api import (
     dashboard, ws, settings_api, waypoints, robot_patrol,
     deployments, auth, point_configs, inspection_batches,
     workbench, photo_catalog, incidents, freshness, bindings, maintenance,
+    actuator_commands, ai_advice, planting_batches, reports,
 )
 from app.api.auth import get_current_user
 from app.core.redis import get_redis
@@ -55,6 +56,10 @@ _ROUTERS = [
     (freshness.router,          "",                   "Freshness 数据新鲜度",            True),
     (bindings.router,           "",                   "Bindings 设备绑定",               True),
     (maintenance.router,        "",                   "Maintenance 运维兜底",            True),
+    (actuator_commands.router,  "",                   "ActuatorCommands 控制命令流转",    True),
+    (ai_advice.router,          "",                   "AI 受控接口与指标定义",            True),
+    (planting_batches.router,   "",                   "PlantingBatches 种植批次",         True),
+    (reports.router,            "",                   "Reports 报表导出",                 True),
 ]
 
 for _r, _prefix, _tag, _secure in _ROUTERS:

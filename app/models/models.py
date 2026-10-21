@@ -653,6 +653,63 @@ class Alert(Base):
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# ── 第四批：种植批次 / 指标定义 / AI 建议留痕 ─────────────────
+class PlantingBatch(Base):
+    """种植批次：一块地（大棚/分区）一茬作物的起止。"""
+    __tablename__ = "planting_batches"
+    id           = Column(String(36), primary_key=True, default=gen_uuid)
+    code         = Column(String(60), nullable=False, index=True)
+    greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=False, index=True)
+    zone         = Column(String(100))
+    crop_type    = Column(String(100), nullable=False)
+    variety      = Column(String(100))
+    area         = Column(Float)
+    status       = Column(String(20), nullable=False, default="planned", index=True)
+    planted_at   = Column(DateTime(timezone=True))
+    expected_harvest_at = Column(DateTime(timezone=True))
+    harvested_at = Column(DateTime(timezone=True))
+    note         = Column(Text)
+    company_id   = Column(String(36), nullable=True, index=True)
+    created_by   = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class MetricDefinition(Base):
+    """指标定义最小集：编码 / 单位 / 类型 / 合理区间 / 质量规则。"""
+    __tablename__ = "metric_definitions"
+    __table_args__ = (UniqueConstraint("code", name="uq_metric_definition_code"),)
+    id           = Column(String(36), primary_key=True, default=gen_uuid)
+    code         = Column(String(60), nullable=False)
+    name         = Column(String(100), nullable=False)
+    unit         = Column(String(20))
+    value_type   = Column(String(20), nullable=False, default="float")
+    min_value    = Column(Float)
+    max_value    = Column(Float)
+    precision    = Column(Integer, default=2)
+    source       = Column(String(30), default="sensor", nullable=False)
+    quality_rules = Column(JSON, default={})
+    enabled      = Column(Boolean, default=True, nullable=False)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AiAdviceLog(Base):
+    """AI 建议留痕：AI 只产出建议，不直接操作设备。"""
+    __tablename__ = "ai_advice_logs"
+    id            = Column(String(36), primary_key=True, default=gen_uuid)
+    greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)
+    kind          = Column(String(40), nullable=False, default="advice")
+    request       = Column(JSON, default={})
+    advice        = Column(JSON, default=[])
+    basis         = Column(JSON, default={})
+    # 受控标记：本次生成是否碰过数据库/是否发过控制指令
+    db_access_used     = Column(Boolean, default=False, nullable=False)
+    control_issued     = Column(Boolean, default=False, nullable=False)
+    requested_by  = Column(String(36), ForeignKey("users.id"), nullable=True)
+    company_id    = Column(String(36), nullable=True, index=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class RawMessage(Base):
     """原始报文（可追溯/可重放）。"""
     __tablename__ = "raw_messages"
