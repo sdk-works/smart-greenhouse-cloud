@@ -216,15 +216,10 @@ SET company_id = g.company_id
 FROM greenhouses g
 WHERE t.greenhouse_id = g.id AND t.company_id IS NULL;
 
--- ── 10) 条件收紧 NOT NULL（仅当无空值） ─────────────────────
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM greenhouses WHERE company_id IS NULL) THEN
-    ALTER TABLE greenhouses ALTER COLUMN company_id SET NOT NULL;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM greenhouses WHERE base_id IS NULL) THEN
-    ALTER TABLE greenhouses ALTER COLUMN base_id SET NOT NULL;
-  END IF;
-END $$;
+-- ── 10) NOT NULL 收紧推迟到第二批 ───────────────────────────
+-- 当前 API 尚未统一写入 company_id/base_id；此刻收紧会导致新建大棚 500。
+-- 待代码层统一写入（并在测试库验证无空值）后，用 002 迁移收紧：
+--   ALTER TABLE greenhouses ALTER COLUMN company_id SET NOT NULL;
+--   ALTER TABLE greenhouses ALTER COLUMN base_id    SET NOT NULL;
 
 COMMIT;
