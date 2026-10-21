@@ -12,6 +12,7 @@ from app.api.auth import check_permission, get_current_user
 from app.core.database import get_db
 from app.core.map_doc import MAX_POINTS, normalize_doc
 from app.core.point_service import apply_points, bind, load_points, unbind
+from app.core.company_scope import can_access_company
 from app.models.models import (Device, Greenhouse, InspectionPoint, InspectionVisit,
                                NavPointDiscovery, RobotPointConfig,
                                RobotPointConfigRelease, Telemetry, User)
@@ -206,7 +207,7 @@ async def get_map(greenhouse_id: str, db: AsyncSession = Depends(get_db),
     """返回地图文档：{revision, layout, points, defaults, next_name}（points 来自 inspection_points）。"""
     check_permission(_, "view_point_mapping")
     gh = await db.get(Greenhouse, greenhouse_id)
-    if not gh:
+    if not gh or not can_access_company(_, gh.company_id):
         raise HTTPException(404, "大棚不存在")
     doc = normalize_doc(gh.map_data)
     points = await load_points(db, gh, doc)
@@ -234,7 +235,7 @@ async def put_map(greenhouse_id: str, payload: MapDocIn,
     if len(payload.points) > MAX_POINTS:
         raise HTTPException(400, f"点位数量超过上限 {MAX_POINTS}")
     gh = await db.get(Greenhouse, greenhouse_id)
-    if not gh:
+    if not gh or not can_access_company(_, gh.company_id):
         raise HTTPException(404, "大棚不存在")
 
     doc = normalize_doc(gh.map_data)
@@ -278,7 +279,7 @@ async def bind_point(greenhouse_id: str, point_id: str, payload: BindingIn2,
     """按稳定点位 id 关联/解除机器人导航编号。"""
     check_permission(_, "edit_point_mapping")
     gh = await db.get(Greenhouse, greenhouse_id)
-    if not gh:
+    if not gh or not can_access_company(_, gh.company_id):
         raise HTTPException(404, "大棚不存在")
 
     doc = normalize_doc(gh.map_data)

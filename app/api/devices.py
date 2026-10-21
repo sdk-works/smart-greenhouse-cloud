@@ -11,6 +11,8 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.core.company_scope import company_filter, is_platform
+from app.models.models import Greenhouse
 from app.api.auth import check_permission, get_current_user
 from app.core.redis import CacheService, get_redis
 from app.models.models import Device, DeviceLog, Greenhouse
@@ -45,8 +47,12 @@ async def list_devices(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     query = select(Device)
+    if not is_platform(user):
+        query = query.join(Greenhouse, Device.greenhouse_id == Greenhouse.id).where(
+            company_filter(user, Greenhouse.company_id))
     if greenhouse_id:
         query = query.where(Device.greenhouse_id == greenhouse_id)
     if device_type:
