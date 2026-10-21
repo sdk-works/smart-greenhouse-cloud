@@ -222,4 +222,15 @@ WHERE t.greenhouse_id = g.id AND t.company_id IS NULL;
 --   ALTER TABLE greenhouses ALTER COLUMN company_id SET NOT NULL;
 --   ALTER TABLE greenhouses ALTER COLUMN base_id    SET NOT NULL;
 
+-- ── 11) 授权应用用户（新建表默认属主是 postgres） ──────────
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'greenhouse') THEN
+    GRANT USAGE ON SCHEMA public TO greenhouse;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO greenhouse;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO greenhouse;
+  END IF;
+END $$;
+
 COMMIT;
