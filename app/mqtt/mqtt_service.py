@@ -580,7 +580,8 @@ class MQTTService:
                 logger.warning(f"[RAW] 原始报文记录失败: {e}")
 
         await self._publish_device_ack(device_id, msg_id, "stored")
-        await self._push_realtime(device_id, greenhouse_id, received_at, data, {}, None)
+        await self._push_realtime(device_id, greenhouse_id, received_at, data, {}, None,
+                                  company_id=company_id)
         logger.info(f"[DEV-ACK] ✅ 遥测入库并回 stored device={device_id} msg={msg_id}")
         return True
 
@@ -617,6 +618,9 @@ class MQTTService:
 
             device.status    = DeviceStatus.ONLINE
             device.last_seen = datetime.now(timezone.utc)
+
+            gh_row      = await db.get(Greenhouse, device.greenhouse_id) if device.greenhouse_id else None
+            company_id  = gh_row.company_id if gh_row else None
 
             ts           = _parse_ts(payload.get("timestamp"))
             data         = _safe(payload.get("data"))
@@ -666,7 +670,8 @@ class MQTTService:
                 await self._receipt_insert(db, robot_id, msg_id, digest, 'telemetry')
             await db.commit()
 
-        await self._push_realtime(robot_id, greenhouse_id, ts, data, robot_status, pm)
+        await self._push_realtime(robot_id, greenhouse_id, ts, data, robot_status, pm,
+                                  company_id=company_id)
         logger.info(
             f"[MQTT-V9] ✅ 遥测 robot={robot_id}"
             + (f" {pm['chassis_point']}→{pm['greenhouse_point']}" if pm else "")
@@ -675,6 +680,7 @@ class MQTTService:
         return True
 
     async def _handle_heartbeat(self, robot_id: str, payload: dict, digest=None):
+        heartbeat_company_id = None
         async with AsyncSessionLocal() as db:
             msg_id = payload.get("msg_id")
             if digest and await self._receipt_check(db, robot_id, msg_id, digest):
@@ -687,13 +693,15 @@ class MQTTService:
                 return False
             device.status    = DeviceStatus.ONLINE
             device.last_seen = datetime.now(timezone.utc)
+            gh_row = await db.get(Greenhouse, device.greenhouse_id) if device.greenhouse_id else None
+            heartbeat_company_id = gh_row.company_id if gh_row else None
             if digest:
                 await self._receipt_insert(db, robot_id, msg_id, digest, 'heartbeat')
             await db.commit()
         try:
             redis = await get_redis()
-            await redis.set(f"device:online:{robot_id}", "1", ex=120)
-            cache = CacheService(redis)
+            cache = CacheService(redis, company_id=heartbeat_company_id)
+            await cache.set_device_online(robot_id, True)
             await cache.publish("telemetry_updates", {
                 "type": "heartbeat", "device_id": robot_id,
                 "battery": payload.get("battery"),
@@ -761,11 +769,13 @@ class MQTTService:
         logger.info(f"[MQTT-V9] 📷 图片通知 robot={robot_id} url={payload.get('image_url')}"
                     + (f" @ {pm['chassis_point']}" if pm else ""))
 
-    async def _push_realtime(self, device_id, greenhouse_id, ts, data, robot_status, pm):
+    async def _push_realtime(self, device_id, greenhouse_id, ts, data, robot_status, pm,
+                             company_id=None):
         data = _normalize_realtime_data(data)
         try:
             redis = await get_redis()
-            cache = CacheService(redis)
+            # M1：缓存键带公司前缀，写侧与读侧必须用同一公司标识
+            cache = CacheService(redis, company_id=company_id)
             await cache.set_device_online(device_id, True)
             await cache.set_device_status(device_id, {
                 "online": True, "last_seen": datetime.now(timezone.utc).isoformat(),
