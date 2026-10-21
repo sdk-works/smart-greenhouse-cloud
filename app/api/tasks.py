@@ -9,7 +9,9 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.models.models import RobotTask, Device, TaskStatus
+from app.models.models import User
 from app.schemas.schemas import RobotTaskCreate, RobotTaskUpdate, RobotTaskResponse
 from app.mqtt.mqtt_service import mqtt_service
 
@@ -36,7 +38,8 @@ async def list_tasks(
 
 
 @router.post("/", response_model=RobotTaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(payload: RobotTaskCreate, db: AsyncSession = Depends(get_db)):
+async def create_task(payload: RobotTaskCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     task = RobotTask(
         task_name   = payload.task_name,
         task_type   = payload.task_type,
@@ -67,8 +70,9 @@ async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
 async def update_task(
     task_id: str,
     payload: RobotTaskUpdate,
-    db: AsyncSession = Depends(get_db)
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    check_permission(user, "manage_robots")
     result = await db.execute(select(RobotTask).where(RobotTask.id == task_id))
     task = result.scalar_one_or_none()
     if not task:
@@ -81,7 +85,8 @@ async def update_task(
 
 
 @router.post("/{task_id}/dispatch")
-async def dispatch_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def dispatch_task(task_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     """下发任务到机器人（修复：publish_command 返回 bool，不再 raise RuntimeError）"""
     result = await db.execute(select(RobotTask).where(RobotTask.id == task_id))
     task = result.scalar_one_or_none()
@@ -121,7 +126,8 @@ async def dispatch_task(task_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{task_id}/cancel")
-async def cancel_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def cancel_task(task_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "manage_robots")
     result = await db.execute(select(RobotTask).where(RobotTask.id == task_id))
     task = result.scalar_one_or_none()
     if not task:

@@ -11,7 +11,9 @@ from sqlalchemy import select, delete
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.models.models import Deployment, PointMapping, Device, Greenhouse, DeploymentStatus, MappingSyncStatus
+from app.models.models import User
 from app.mqtt.mqtt_service import mqtt_service
 
 router = APIRouter()
@@ -112,7 +114,8 @@ async def list_deployments(db: AsyncSession = Depends(get_db)):
     return out
 
 @router.post("/", response_model=DeploymentOut, status_code=201)
-async def create_deployment(payload: DeploymentCreate, db: AsyncSession = Depends(get_db)):
+async def create_deployment(payload: DeploymentCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "edit_deployment")
     dep = Deployment(
         name=payload.name,
         device_id=payload.device_id,
@@ -154,7 +157,8 @@ async def get_deployment(dep_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{dep_id}")
-async def update_deployment(dep_id: str, payload: DeploymentCreate, db: AsyncSession = Depends(get_db)):
+async def update_deployment(dep_id: str, payload: DeploymentCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "edit_deployment")
     dep = await db.get(Deployment, dep_id)
     if not dep: raise HTTPException(status_code=404, detail="方案不存在")
     dep.name      = payload.name
@@ -174,7 +178,8 @@ async def update_deployment(dep_id: str, payload: DeploymentCreate, db: AsyncSes
 
 
 @router.delete("/{dep_id}", status_code=204)
-async def delete_deployment(dep_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_deployment(dep_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "edit_deployment")
     dep = await db.get(Deployment, dep_id)
     if not dep: raise HTTPException(status_code=404, detail="方案不存在")
     await db.delete(dep)
@@ -184,7 +189,8 @@ async def delete_deployment(dep_id: str, db: AsyncSession = Depends(get_db)):
 # ── 发布配置 ──────────────────────────────────────────────────
 
 @router.post("/{dep_id}/publish")
-async def publish_deployment(dep_id: str, db: AsyncSession = Depends(get_db)):
+async def publish_deployment(dep_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "publish_deployment")
     dep = await db.get(Deployment, dep_id)
     if not dep: raise HTTPException(status_code=404, detail="方案不存在")
 
@@ -252,7 +258,8 @@ async def list_mappings(dep_id: str, db: AsyncSession = Depends(get_db)):
     return out
 
 @router.post("/{dep_id}/point-mapping", response_model=PointMappingOut, status_code=201)
-async def add_mapping(dep_id: str, payload: PointMappingIn, db: AsyncSession = Depends(get_db)):
+async def add_mapping(dep_id: str, payload: PointMappingIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "edit_deployment")
     existing = await db.execute(
         select(PointMapping).where(
             PointMapping.deployment_id == dep_id,
@@ -286,8 +293,9 @@ async def add_mapping(dep_id: str, payload: PointMappingIn, db: AsyncSession = D
 @router.put("/{dep_id}/point-mapping/{mapping_id}", response_model=PointMappingOut)
 async def update_mapping(
     dep_id: str, mapping_id: str,
-    payload: PointMappingIn, db: AsyncSession = Depends(get_db)
+    payload: PointMappingIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    check_permission(user, "edit_deployment")
     pm = await db.get(PointMapping, mapping_id)
     if not pm or pm.deployment_id != dep_id:
         raise HTTPException(status_code=404, detail="映射不存在")
@@ -309,7 +317,8 @@ async def update_mapping(
 
 
 @router.delete("/{dep_id}/point-mapping/{mapping_id}", status_code=204)
-async def delete_mapping(dep_id: str, mapping_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_mapping(dep_id: str, mapping_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    check_permission(user, "edit_deployment")
     pm = await db.get(PointMapping, mapping_id)
     if not pm or pm.deployment_id != dep_id:
         raise HTTPException(status_code=404, detail="映射不存在")

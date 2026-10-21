@@ -15,8 +15,10 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.core.config import settings
 from app.models.models import Greenhouse, Device, DeviceType
+from app.models.models import User
 
 router = APIRouter()
 
@@ -105,8 +107,9 @@ async def get_greenhouse_map(greenhouse_id: str, db: AsyncSession = Depends(get_
 async def update_greenhouse_map(
     greenhouse_id: str,
     config: GreenhouseMapConfig,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "edit_point_mapping")
     """更新大棚地图配置（可视化拖拽后保存）"""
     result = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))
     gh = result.scalar_one_or_none()
@@ -127,8 +130,9 @@ async def update_greenhouse_map(
 async def add_waypoint(
     greenhouse_id: str,
     waypoint: WaypointConfig,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "edit_point_mapping")
     """添加单个巡检点位"""
     result = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))
     gh = result.scalar_one_or_none()
@@ -163,8 +167,9 @@ async def add_waypoint(
 async def delete_waypoint(
     greenhouse_id: str,
     waypoint_id: int,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "edit_point_mapping")
     """删除指定巡检点位"""
     result = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))
     gh = result.scalar_one_or_none()
@@ -197,8 +202,9 @@ async def get_robot_config(device_id: str, db: AsyncSession = Depends(get_db)):
 async def update_robot_config(
     device_id: str,
     config: RobotConfig,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "manage_robots")
     """更新机器人配置"""
     result = await db.execute(select(Device).where(Device.device_id == device_id))
     device = result.scalar_one_or_none()
@@ -214,8 +220,9 @@ async def update_robot_config(
 async def assign_robot_to_greenhouse(
     device_id: str,
     greenhouse_id: str,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "manage_robots")
     """
     将机器人分配到大棚（一个机器人可服务多个大棚）
     配置机器人使用该大棚的巡检点位
@@ -265,7 +272,8 @@ async def get_mqtt_config():
 
 
 @router.put("/mqtt")
-async def update_mqtt_config(config: MQTTConfig):
+async def update_mqtt_config(config: MQTTConfig, user: User = Depends(get_current_user)):
+    check_permission(user, "mqtt_config")
     """
     更新 MQTT 配置（写入 .env 文件，需重启服务生效）
     注意：重启后才会连接新的 Broker
@@ -325,7 +333,8 @@ async def get_system_config():
 
 
 @router.put("/system")
-async def update_system_config(config: SystemConfig):
+async def update_system_config(config: SystemConfig, user: User = Depends(get_current_user)):
+    check_permission(user, "system_config")
     """更新系统全局配置"""
     cfg = load_config()
     cfg["system"] = config.model_dump()

@@ -10,7 +10,9 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.api.auth import check_permission, get_current_user
 from app.models.models import Greenhouse
+from app.models.models import User
 
 router = APIRouter()
 
@@ -58,8 +60,9 @@ async def list_waypoints(greenhouse_id: str, db: AsyncSession = Depends(get_db))
 async def create_waypoint(
     greenhouse_id: str,
     payload: WaypointIn,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "edit_waypoints")
     """新增点位（自动分配 id）"""
     async with db.begin():
         # 👇 加 FOR UPDATE 锁，强制等前一个请求完成
@@ -82,8 +85,9 @@ async def update_waypoint(
     greenhouse_id: str,
     wp_id: int,
     payload: WaypointIn,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "edit_waypoints")
     """修改指定点位"""
     async with db.begin():
         r = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))
@@ -106,8 +110,9 @@ async def update_waypoint(
 async def delete_waypoint(
     greenhouse_id: str,
     wp_id: int,
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
+    check_permission(user, "edit_waypoints")
     """删除指定点位"""
     async with db.begin():
         r = await db.execute(select(Greenhouse).where(Greenhouse.id == greenhouse_id))

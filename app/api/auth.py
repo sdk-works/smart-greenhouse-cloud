@@ -11,7 +11,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from passlib.context import CryptContext
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.models.models import User, UserRole, AuditLog
 from app.core.redis import get_redis
 
@@ -61,7 +61,6 @@ async def _gen_token(user_id: str) -> str:
 
 async def get_current_user(
     authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db),
 ) -> User:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="请先登录")
@@ -71,7 +70,10 @@ async def get_current_user(
     if not user_id:
         raise HTTPException(status_code=401, detail="Token 无效或已过期")
     await redis.expire(f"auth:token:{token}", TOKEN_TTL_SECONDS)
-    user = await db.get(User, user_id)
+    # 使用独立 session 读取用户，避免与端点共享 session 的事务冲突
+    # （部分端点内部使用 async with db.begin()，若此处已开启事务会冲突）
+    async with AsyncSessionLocal() as _db:
+        user = await _db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="用户不存在或已禁用")
     return user
