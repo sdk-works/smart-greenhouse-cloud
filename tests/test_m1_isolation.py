@@ -26,6 +26,7 @@ from app.models.models import (
     TaskStatus, TaskType, Telemetry, User, UserRole, AuditLog,
 )
 from tests.conftest import auth
+from tests.iso_fx import IsoFixture
 
 API = settings.API_PREFIX
 STATS = f"{API}/dashboard/stats"
@@ -36,126 +37,6 @@ _KEYS = ("total_greenhouses", "total_devices", "online_devices", "active_tasks",
 
 def _uid(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:10]}"
-
-
-class _Fixture:
-    """一次性创建的隔离数据，测试结束后整体清理。"""
-
-    def __init__(self):
-        self.companies = []
-        self.greenhouses = []
-        self.devices = []
-        self.tel_rows = []
-        self.images = []
-        self.tasks = []
-        self.users = []
-        self.tokens = []
-
-    async def company(self, db, name):
-        c = Company(id=str(uuid.uuid4()), name=name)
-        db.add(c)
-        self.companies.append(c.id)
-        await db.flush()
-        return c.id
-
-    async def greenhouse(self, db, cid, name):
-        gh = Greenhouse(id=str(uuid.uuid4()), name=name, company_id=cid, is_active=True)
-        db.add(gh)
-        self.greenhouses.append(gh.id)
-        await db.flush()
-        return gh
-
-    async def device(self, db, gh, kind=DeviceType.SENSOR):
-        d = Device(id=str(uuid.uuid4()), device_id=_uid("dev"), name="m1", device_type=kind,
-                   greenhouse_id=gh.id, status=DeviceStatus.ONLINE)
-        db.add(d)
-        self.devices.append(d.id)
-        await db.flush()
-        return d
-
-    async def telemetry(self, db, gh, dev, cid):
-        t = Telemetry(id=str(uuid.uuid4()), device_id=dev.id, greenhouse_id=gh.id,
-                      timestamp=datetime.now(timezone.utc), data_type="telemetry",
-                      temperature=20.0, company_id=cid)
-        db.add(t)
-        self.tel_rows.append(t.id)
-        await db.flush()
-        return t
-
-    async def image(self, db, gh, dev):
-        img = Image(id=str(uuid.uuid4()), device_id=dev.id, greenhouse_id=gh.id,
-                    storage_url=f"http://x/{uuid.uuid4().hex}.jpg",
-                    captured_at=datetime.now(timezone.utc))
-        db.add(img)
-        self.images.append(img.id)
-        await db.flush()
-        return img
-
-    async def task(self, db, gh, dev):
-        t = RobotTask(id=str(uuid.uuid4()), task_name="m1", task_type=TaskType.INSPECTION,
-                      greenhouse_id=gh.id, device_id=dev.id, status=TaskStatus.PENDING)
-        db.add(t)
-        self.tasks.append(t.id)
-        await db.flush()
-        return t
-
-    async def user(self, db, role=UserRole.ADMIN, company_id=None, platform=False):
-        u = User(id=str(uuid.uuid4()), username=_uid("u"), password_hash="m1-not-used",
-                 role=role, is_active=True, company_id=company_id,
-                 is_platform_operator=platform)
-        db.add(u)
-        self.users.append(u.id)
-        await db.flush()
-        token = secrets.token_urlsafe(24)
-        redis = await get_redis()
-        await redis.set(f"auth:token:{token}", u.id, ex=3600)
-        self.tokens.append(token)
-        return u, token
-
-
-@pytest.fixture
-async def iso():
-    fx = _Fixture()
-    async with AsyncSessionLocal() as db:
-        try:
-            yield fx, db
-        finally:
-            await db.rollback()
-            await _cleanup(fx)
-
-
-async def _cleanup(fx):
-    async with AsyncSessionLocal() as db:
-        for tid in fx.tasks:
-            row = await db.get(RobotTask, tid)
-            if row: await db.delete(row)
-        for iid in fx.images:
-            row = await db.get(Image, iid)
-            if row: await db.delete(row)
-        for tid in fx.tel_rows:
-            row = await db.get(Telemetry, tid)
-            if row: await db.delete(row)
-        for did in fx.devices:
-            row = await db.get(Device, did)
-            if row: await db.delete(row)
-        for gid in fx.greenhouses:
-            row = await db.get(Greenhouse, gid)
-            if row: await db.delete(row)
-        for uid in fx.users:
-            rows = (await db.execute(
-                select(AuditLog).where(AuditLog.user_id == uid))).scalars().all()
-            for r in rows:
-                await db.delete(r)
-            row = await db.get(User, uid)
-            if row: await db.delete(row)
-        await db.commit()
-        for cid in fx.companies:
-            row = await db.get(Company, cid)
-            if row: await db.delete(row)
-        await db.commit()
-    redis = await get_redis()
-    for t in fx.tokens:
-        await redis.delete(f"auth:token:{t}")
 
 
 async def _seed(fx, db, cid, prefix):

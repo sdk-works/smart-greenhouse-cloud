@@ -26,7 +26,9 @@ class DeviceStatus(str, enum.Enum):
     ONLINE = "online"; OFFLINE = "offline"; ERROR = "error"; MAINTENANCE = "maintenance"
 
 class TaskStatus(str, enum.Enum):
-    PENDING = "pending"; RUNNING = "running"; COMPLETED = "completed"
+    """M2 巡检任务状态机：流转规则见 app/core/task_state.py。"""
+    PENDING = "pending"; RUNNING = "running"; PAUSED = "paused"
+    COMPLETED = "completed"; PARTIAL = "partial"
     FAILED = "failed"; CANCELLED = "cancelled"
 
 class TaskType(str, enum.Enum):
@@ -262,7 +264,10 @@ class RobotTask(Base):
     task_type     = Column(SAEnum(TaskType), default=TaskType.INSPECTION)
     greenhouse_id = Column(String(36), ForeignKey("greenhouses.id"), nullable=False)
     device_id     = Column(String(36), ForeignKey("devices.id"), nullable=True)
-    status        = Column(SAEnum(TaskStatus), default=TaskStatus.PENDING)
+    # M2：状态改为普通字符串列（流转规则由 app/core/task_state.py 在代码层强制），
+    # 避免每次新增状态都要 ALTER TYPE（原生枚举不能在事务内加值）。
+    status        = Column(String(20), default=TaskStatus.PENDING.value,
+                           nullable=False, index=True)
     priority      = Column(Integer, default=5)
     scheduled_at  = Column(DateTime(timezone=True))
     started_at    = Column(DateTime(timezone=True))
@@ -271,6 +276,9 @@ class RobotTask(Base):
     actions       = Column(JSON, default=[])
     task_config   = Column(JSON, default={})
     result        = Column(JSON); error_message = Column(Text); progress = Column(Integer, default=0)
+    # M2：创建时快照（地图版本 / 点位列表 / 采集参数），后续编辑不改写
+    snapshot      = Column(JSON)
+    map_version_id = Column(String(36), ForeignKey("map_versions.id"), nullable=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
     greenhouse    = relationship("Greenhouse", back_populates="tasks")
@@ -293,6 +301,11 @@ class Image(Base):
     ai_analysis     = Column(JSON); tags = Column(JSON, default=[])
     captured_at     = Column(DateTime(timezone=True))
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    # M2：照片归档（能解析才写，解析不出留 NULL，不猜）
+    point_id        = Column(String(36), ForeignKey("inspection_points.id"), nullable=True, index=True)
+    map_version_id  = Column(String(36), ForeignKey("map_versions.id"), nullable=True)
+    batch_id        = Column(String(36), ForeignKey("inspection_batches.id"), nullable=True)
+    company_id      = Column(String(36), nullable=True, index=True)
     task            = relationship("RobotTask", back_populates="images")
 
 
@@ -533,6 +546,55 @@ class MapVersion(Base):
     published_at    = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     published_by    = Column(String(36))
     immutable       = Column(Boolean, default=True, nullable=False)
+
+
+# ── 第二批：巡检证据 / 机器人地图版本登记与核对 ─────────────────
+class InspectionEvidence(Base):
+    """巡检证据：一次点位采集留存的媒体与上下文，独立于事后编辑。"""
+    __tablename__ = "inspection_evidence"
+    id                = Column(String(36), primary_key=True, default=gen_uuid)
+    task_id           = Column(String(36), ForeignKey("robot_tasks.id"), nullable=True, index=True)
+    batch_id          = Column(String(36), ForeignKey("inspection_batches.id"), nullable=True)
+    point_id          = Column(String(36), ForeignKey("inspection_points.id"), nullable=True, index=True)
+    greenhouse_id     = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)
+    robot_id          = Column(String(100), nullable=True, index=True)
+    nav_point_code    = Column(String(64), nullable=True)
+    map_version_id    = Column(String(36), ForeignKey("map_versions.id"), nullable=True)
+    evidence_type     = Column(String(30), nullable=False, default="photo")
+    # 归属解析结果：resolved / pending（不确定时不猜，直接留 pending）
+    attribution_status = Column(String(20), nullable=False, default="pending")
+    media             = Column(JSON, nullable=False, default={})
+    captured_at       = Column(DateTime(timezone=True))
+    company_id        = Column(String(36), nullable=True, index=True)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RobotMapRegistry(Base):
+    """平台侧登记的机器人地图版本（期望值）。"""
+    __tablename__ = "robot_map_registry"
+    id             = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id       = Column(String(100), nullable=False, index=True)
+    greenhouse_id  = Column(String(36), ForeignKey("greenhouses.id"), nullable=True)
+    map_version    = Column(String(64), nullable=False)
+    source         = Column(String(30), nullable=False, default="platform")
+    registered_by  = Column(String(36), ForeignKey("users.id"), nullable=True)
+    note           = Column(Text)
+    active         = Column(Boolean, default=True, nullable=False)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RobotMapAlert(Base):
+    """机器人回传地图版本与平台登记不一致时产生的告警记录（只记录，不自动改）。"""
+    __tablename__ = "robot_map_alerts"
+    id                    = Column(String(36), primary_key=True, default=gen_uuid)
+    robot_id              = Column(String(100), nullable=False, index=True)
+    expected_map_version  = Column(String(64), nullable=True)
+    reported_map_version  = Column(String(64), nullable=True)
+    source                = Column(String(30), nullable=False, default="config_ack")
+    status                = Column(String(20), nullable=False, default="open", index=True)
+    detail                = Column(JSON)
+    created_at            = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at           = Column(DateTime(timezone=True))
 
 
 class RawMessage(Base):
