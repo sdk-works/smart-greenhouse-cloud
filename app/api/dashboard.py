@@ -59,7 +59,7 @@ async def _scoped_counts(
 
     active_tasks = (await db.execute(
         select(func.count(RobotTask.id)).where(
-            RobotTask.status.in_([TaskStatus.RUNNING, TaskStatus.PENDING]),
+            RobotTask.status.in_([TaskStatus.RUNNING.value, TaskStatus.PENDING.value]),
             *_gh_cond(RobotTask.greenhouse_id)
         )
     )).scalar() or 0

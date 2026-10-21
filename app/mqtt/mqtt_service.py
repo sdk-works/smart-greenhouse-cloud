@@ -20,10 +20,14 @@ from sqlalchemy import select, text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.redis import CacheService, get_redis
+from app.core.photo_service import (
+    greenhouse_company, latest_map_version, record_evidence, resolve_point,
+)
+from app.core.robot_map_service import check_robot_map_version
 from app.models.models import (
     Device, Telemetry, DeviceStatus, MappingSyncStatus, ActuatorCommand,
     ActuatorProfile, CommandStatus, NavPointDiscovery, RobotPointConfigRelease,
-    InspectionBatch, InspectionVisit, Greenhouse, RawMessage,
+    InspectionBatch, InspectionVisit, Greenhouse, RawMessage, Image,
 )
 
 logger = logging.getLogger(__name__)
@@ -746,6 +750,17 @@ class MQTTService:
 
     async def _apply_config_ack(self, db, robot_id, payload):
         cv = payload.get("config_version")
+        # M2：机器人回传的地图版本与平台登记不一致 → 只告警，不自动改
+        reported_map = payload.get("robot_map_version") or payload.get("map_version")
+        try:
+            result = await check_robot_map_version(db, robot_id, reported_map,
+                                                   source="config_ack")
+            if result["status"] == "mismatch":
+                logger.warning(
+                    f"[MAPVER] ⚠️ robot={robot_id} 登记={result['expected']}"
+                    f" 回传={result['reported']}（已记录告警，不自动修改）")
+        except Exception as e:
+            logger.error(f"[MAPVER] 核对失败 robot={robot_id}: {e}")
         pm_ok = payload.get("point_mapping_sync_status", "synced")
         result = await db.execute(select(Device).where(Device.device_id == robot_id))
         device = result.scalar_one_or_none()
@@ -768,6 +783,76 @@ class MQTTService:
         pm = self._validate_point_mapping(payload)
         logger.info(f"[MQTT-V9] 📷 图片通知 robot={robot_id} url={payload.get('image_url')}"
                     + (f" @ {pm['chassis_point']}" if pm else ""))
+        await self._store_image_notify(robot_id, payload, pm)
+
+    async def _store_image_notify(self, robot_id: str, payload: dict, pm):
+        """M2：图片通知入库，并尽力解析点位归属（解析不出留 NULL，不猜）。"""
+        image_url = payload.get("image_url") or payload.get("url")
+        if not image_url:
+            return None
+        try:
+            async with AsyncSessionLocal() as db:
+                dev = (await db.execute(select(Device).where(
+                    Device.device_id == robot_id))).scalar_one_or_none()
+                if not dev:
+                    logger.warning(f"[PHOTO] 未注册设备 {robot_id}，图片通知不入库")
+                    return None
+
+                greenhouse_id = (pm or {}).get("greenhouse_id") or dev.greenhouse_id
+                nav_point_code = (pm or {}).get("nav_point_code") \
+                    or payload.get("nav_point_code")
+                point = await resolve_point(
+                    db, robot_id=robot_id, nav_point_code=nav_point_code,
+                    greenhouse_id=greenhouse_id,
+                    point_name=payload.get("greenhouse_point") or (pm or {}).get("greenhouse_point"),
+                )
+                mv = await latest_map_version(db, greenhouse_id)
+                captured_at = _parse_ts(payload.get("captured_at")) \
+                    if payload.get("captured_at") else datetime.now(timezone.utc)
+
+                img = Image(
+                    device_id=dev.id,
+                    task_id=payload.get("task_id"),
+                    greenhouse_id=greenhouse_id,
+                    storage_url=image_url,
+                    thumbnail_url=payload.get("thumbnail_url"),
+                    file_size=payload.get("file_size"),
+                    chassis_point=(pm or {}).get("chassis_point"),
+                    greenhouse_point=payload.get("greenhouse_point") or (pm or {}).get("greenhouse_point"),
+                    captured_at=captured_at,
+                    point_id=point.id if point else None,
+                    map_version_id=mv.id if mv else None,
+                    batch_id=payload.get("batch_id"),
+                    company_id=await greenhouse_company(db, greenhouse_id),
+                    tags=["mqtt_notify"],
+                )
+                db.add(img)
+                await db.flush()
+
+                await record_evidence(
+                    db,
+                    image_id=img.id,
+                    image_url=image_url,
+                    thumbnail_url=payload.get("thumbnail_url"),
+                    task_id=payload.get("task_id"),
+                    batch_id=payload.get("batch_id"),
+                    point_id=img.point_id,
+                    greenhouse_id=greenhouse_id,
+                    robot_id=robot_id,
+                    nav_point_code=nav_point_code,
+                    map_version_id=img.map_version_id,
+                    evidence_type="photo",
+                    captured_at=captured_at,
+                    file_size=payload.get("file_size"),
+                )
+                await db.commit()
+                logger.info(
+                    f"[PHOTO] 入库 id={img.id} point={img.point_id or 'NULL(待确认)'}"
+                    f" map_version={img.map_version_id or 'NA'}")
+                return img.id
+        except Exception as e:
+            logger.error(f"[PHOTO] 图片入库失败 robot={robot_id}: {e}")
+            return None
 
     async def _push_realtime(self, device_id, greenhouse_id, ts, data, robot_status, pm,
                              company_id=None):

@@ -19,6 +19,9 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.api.auth import check_permission, get_current_user
 from app.core.config import settings
+from app.core.photo_service import (
+    greenhouse_company, latest_map_version, record_evidence, resolve_point,
+)
 from app.models.models import Image, Device
 from app.models.models import User
 from app.schemas.schemas import ImageResponse
@@ -46,6 +49,9 @@ async def upload_image(
     network_type: Optional[str]  = Query(None, description="网络类型: wifi/ethernet/4g"),
     # 断点续传支持
     file_hash:   Optional[str]   = Query(None, description="文件MD5，用于去重"),
+    # M2：点位归属（解析不出就留 NULL，不猜）
+    nav_point_code:   Optional[str] = Query(None, description="机器人导航点位编号"),
+    greenhouse_point: Optional[str] = Query(None, description="大棚点位名称"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -114,7 +120,12 @@ async def upload_image(
     actual_hash = hashlib.md5(content).hexdigest()
     storage_url = f"{settings.UPLOAD_URL_PREFIX}/{device_id}/{filename}"
 
-    # 7. 写数据库
+    # 7. 写数据库（M2：点位归属解析，解析不出留 NULL）
+    point = await resolve_point(
+        db, robot_id=device_id, nav_point_code=nav_point_code,
+        greenhouse_id=device.greenhouse_id, point_name=greenhouse_point,
+    )
+    mv = await latest_map_version(db, device.greenhouse_id)
     image = Image(
         device_id     = device.id,
         task_id       = task_id,
@@ -127,8 +138,25 @@ async def upload_image(
         tags          = [f"network:{network_type}"] if network_type else [],
         captured_at   = datetime.now(timezone.utc),
         ai_analysis   = {"file_hash": actual_hash, "network_type": network_type},
+        point_id      = point.id if point else None,
+        map_version_id= mv.id if mv else None,
+        company_id    = await greenhouse_company(db, device.greenhouse_id),
     )
     db.add(image)
+    await db.flush()
+    await record_evidence(
+        db,
+        image_id=image.id,
+        image_url=storage_url,
+        task_id=task_id,
+        point_id=image.point_id,
+        greenhouse_id=device.greenhouse_id,
+        robot_id=device_id,
+        nav_point_code=nav_point_code,
+        map_version_id=image.map_version_id,
+        captured_at=image.captured_at,
+        file_size=len(content),
+    )
     await db.commit()
     await db.refresh(image)
     return image
@@ -176,8 +204,22 @@ async def upload_images_batch(
                 filename=fname, storage_url=url, file_size=len(content),
                 captured_at=datetime.now(timezone.utc),
                 tags=["batch_upload"],
+                company_id=await greenhouse_company(db, device.greenhouse_id),
             )
             db.add(img)
+            await db.flush()
+            await record_evidence(
+                db,
+                image_id=img.id,
+                image_url=url,
+                task_id=task_id,
+                point_id=None,
+                greenhouse_id=device.greenhouse_id,
+                robot_id=device_id,
+                map_version_id=None,
+                captured_at=img.captured_at,
+                file_size=len(content),
+            )
             uploaded.append(url)
         except Exception as e:
             failed.append({"filename": file.filename, "error": str(e)})

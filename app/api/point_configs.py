@@ -13,9 +13,11 @@ from app.core.database import get_db
 from app.core.map_doc import MAX_POINTS, normalize_doc
 from app.core.point_service import apply_points, bind, load_points, unbind
 from app.core.company_scope import can_access_company
+from app.core.robot_map_service import check_robot_map_version, resolve_alert
 from app.models.models import (Device, Greenhouse, InspectionPoint, InspectionVisit,
-                               NavPointDiscovery, RobotPointConfig,
-                               RobotPointConfigRelease, Telemetry, User)
+                               MapVersion, NavPointDiscovery, RobotPointConfig,
+                               RobotPointConfigRelease, RobotMapAlert, RobotMapRegistry,
+                               Telemetry, User)
 from app.mqtt.mqtt_service import mqtt_service
 
 router = APIRouter()
@@ -263,6 +265,165 @@ async def put_map(greenhouse_id: str, payload: MapDocIn,
             "revision": doc["revision"], "layout": doc["layout"],
             "defaults": doc["defaults"], "next_name": doc["next_name"],
             "points": points}
+
+
+class MapVersionOut(BaseModel):
+    id:             str
+    greenhouse_id:  str
+    version:        int
+    schema_version: int
+    published_at:   Optional[datetime] = None
+    published_by:   Optional[str] = None
+    immutable:      bool = True
+    layout:         dict = {}
+    defaults:       dict = {}
+    points_snapshot: list = []
+    model_config = {"from_attributes": True}
+
+
+@router.post("/maps/{greenhouse_id}/publish")
+async def publish_map(greenhouse_id: str,
+                      db: AsyncSession = Depends(get_db),
+                      user: User = Depends(get_current_user)):
+    """把当前 layout/defaults/points 快照写入 map_versions（version = max+1）。
+
+    发布后不可变：没有任何修改/删除接口，GET 只读取。
+    """
+    check_permission(user, "edit_point_mapping")
+    gh = await db.get(Greenhouse, greenhouse_id)
+    if not gh or not can_access_company(user, gh.company_id):
+        raise HTTPException(404, "大棚不存在")
+
+    doc = normalize_doc(gh.map_data)
+    points = await load_points(db, gh, doc)
+    current = (await db.execute(select(func.max(MapVersion.version)).where(
+        MapVersion.greenhouse_id == gh.id))).scalar() or 0
+    version = int(current) + 1
+
+    mv = MapVersion(
+        greenhouse_id=gh.id,
+        version=version,
+        layout=doc["layout"],
+        defaults=doc["defaults"],
+        points_snapshot=points,
+        schema_version=int(doc.get("schema_version") or 2),
+        published_by=user.id,
+        immutable=True,
+    )
+    db.add(mv)
+    await db.commit()
+    await db.refresh(mv)
+    return {"success": True, "greenhouse_id": gh.id, "version": mv.version,
+            "published_at": mv.published_at, "point_count": len(points)}
+
+
+@router.get("/maps/{greenhouse_id}/versions")
+async def list_map_versions(greenhouse_id: str,
+                            db: AsyncSession = Depends(get_db),
+                            user: User = Depends(get_current_user)):
+    check_permission(user, "view_point_mapping")
+    gh = await db.get(Greenhouse, greenhouse_id)
+    if not gh or not can_access_company(user, gh.company_id):
+        raise HTTPException(404, "大棚不存在")
+    rows = (await db.execute(
+        select(MapVersion).where(MapVersion.greenhouse_id == gh.id)
+        .order_by(MapVersion.version.desc()))).scalars().all()
+    return {"greenhouse_id": gh.id,
+            "items": [{"id": r.id, "version": r.version, "published_at": r.published_at,
+                       "published_by": r.published_by, "immutable": r.immutable,
+                       "schema_version": r.schema_version,
+                       "point_count": len(r.points_snapshot or [])} for r in rows],
+            "total": len(rows)}
+
+
+@router.get("/maps/{greenhouse_id}/versions/{version}")
+async def get_map_version(greenhouse_id: str, version: int,
+                          db: AsyncSession = Depends(get_db),
+                          user: User = Depends(get_current_user)):
+    check_permission(user, "view_point_mapping")
+    gh = await db.get(Greenhouse, greenhouse_id)
+    if not gh or not can_access_company(user, gh.company_id):
+        raise HTTPException(404, "大棚不存在")
+    mv = (await db.execute(select(MapVersion).where(
+        MapVersion.greenhouse_id == gh.id,
+        MapVersion.version == version))).scalar_one_or_none()
+    if not mv:
+        raise HTTPException(404, "地图版本不存在")
+    return {"id": mv.id, "greenhouse_id": mv.greenhouse_id, "version": mv.version,
+            "schema_version": mv.schema_version, "published_at": mv.published_at,
+            "published_by": mv.published_by, "immutable": mv.immutable,
+            "layout": mv.layout, "defaults": mv.defaults,
+            "points": mv.points_snapshot}
+
+
+# ── 机器人地图版本登记与核对（只比对、只记录，不自动改） ────────
+class RobotMapVersionIn(BaseModel):
+    map_version: str = Field(min_length=1, max_length=64)
+    greenhouse_id: Optional[str] = None
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+@router.get("/robots/{robot_id}/map-version")
+async def get_robot_map_version(robot_id: str,
+                                db: AsyncSession = Depends(get_db),
+                                _: User = Depends(get_current_user)):
+    """平台侧登记的期望地图版本 + 回传版本 + 未闭环的告警。"""
+    check_permission(_, "view_point_mapping")
+    rows = (await db.execute(
+        select(RobotMapRegistry).where(RobotMapRegistry.robot_id == robot_id)
+        .order_by(RobotMapRegistry.created_at.desc()))).scalars().all()
+    alerts = (await db.execute(
+        select(RobotMapAlert).where(RobotMapAlert.robot_id == robot_id,
+                                    RobotMapAlert.status == "open")
+        .order_by(RobotMapAlert.created_at.desc()).limit(50))).scalars().all()
+    active = next((r for r in rows if r.active), None)
+    return {
+        "robot_id": robot_id,
+        "expected": ({"map_version": active.map_version,
+                      "registered_at": active.created_at} if active else None),
+        "history": [{"map_version": r.map_version, "source": r.source,
+                     "active": r.active, "created_at": r.created_at} for r in rows],
+        "open_alerts": [{"id": a.id, "expected_map_version": a.expected_map_version,
+                         "reported_map_version": a.reported_map_version,
+                         "source": a.source, "created_at": a.created_at} for a in alerts],
+    }
+
+
+@router.put("/robots/{robot_id}/map-version")
+async def register_robot_map_version(robot_id: str, payload: RobotMapVersionIn,
+                                     db: AsyncSession = Depends(get_db),
+                                     user: User = Depends(get_current_user)):
+    """平台登记该机器人应当使用的地图版本（期望值）。"""
+    check_permission(user, "manage_robots")
+    if payload.greenhouse_id:
+        gh = await db.get(Greenhouse, payload.greenhouse_id)
+        if not gh or not can_access_company(user, gh.company_id):
+            raise HTTPException(404, "大棚不存在")
+    old = (await db.execute(select(RobotMapRegistry).where(
+        RobotMapRegistry.robot_id == robot_id,
+        RobotMapRegistry.active == True))).scalars().all()
+    for r in old:
+        r.active = False
+    reg = RobotMapRegistry(robot_id=robot_id, greenhouse_id=payload.greenhouse_id,
+                           map_version=payload.map_version, source="platform",
+                           registered_by=user.id, note=payload.note, active=True)
+    db.add(reg)
+    await db.commit()
+    return {"success": True, "robot_id": robot_id,
+            "map_version": payload.map_version, "source": "platform"}
+
+
+@router.post("/robots/map-alerts/{alert_id}/resolve")
+async def resolve_map_alert(alert_id: str, synced: bool = Query(False),
+                            db: AsyncSession = Depends(get_db),
+                            user: User = Depends(get_current_user)):
+    """人工闭环地图版本告警。**不自动改任何设备配置。**"""
+    check_permission(user, "manage_robots")
+    alert = await resolve_alert(db, alert_id, synced=synced)
+    if alert is None:
+        raise HTTPException(404, "告警不存在")
+    await db.commit()
+    return {"success": True, "alert_id": alert.id, "status": alert.status}
 
 
 class BindingIn2(BaseModel):

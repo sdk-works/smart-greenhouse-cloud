@@ -63,12 +63,68 @@ def guard_database():
     return _guard_test_database()
 
 
+SKIP_STMT_PREFIXES = ("begin", "commit", "rollback", "grant", "revoke", "\\")
+
+
+def split_sql_file(sql: str):
+    """把 .sql 文件切分为单条语句（正确处理 $$...$$ 与字符串字面量内的分号）。"""
+    stmts, buf, i, n = [], [], 0, len(sql)
+    while i < n:
+        if sql.startswith("$$", i):
+            j = sql.find("$$", i + 2)
+            if j == -1:
+                buf.append(sql[i:]); break
+            buf.append(sql[i:j + 2]); i = j + 2; continue
+        ch = sql[i]
+        if ch == "'":
+            j = i + 1
+            while j < n:
+                if sql[j] == "'":
+                    if j + 1 < n and sql[j + 1] == "'":
+                        j += 2; continue
+                    break
+                j += 1
+            buf.append(sql[i:j + 1]); i = j + 1; continue
+        if ch == "-" and sql.startswith("--", i):
+            j = sql.find("\n", i)
+            if j == -1:
+                break
+            i = j + 1; continue
+        if ch == ";":
+            stmts.append("".join(buf).strip()); buf = []; i += 1; continue
+        buf.append(ch); i += 1
+    tail = "".join(buf).strip()
+    if tail:
+        stmts.append(tail)
+    out = []
+    for s in stmts:
+        if s and not s.lstrip().lower().startswith(SKIP_STMT_PREFIXES):
+            out.append(s)
+    return out
+
+
+async def _apply_migration(db, name: str):
+    """在测试库执行 migrations/<name>（只跳过事务控制/授权语句）。"""
+    path = os.path.join(ROOT, "migrations", name)
+    if not os.path.exists(path):
+        pytest.exit(f"缺少迁移文件：{path}", returncode=3)
+    with open(path, "r", encoding="utf-8") as fh:
+        sql = fh.read()
+    for stmt in split_sql_file(sql):
+        await db.execute(text(stmt))
+    await db.commit()
+
+
 @pytest_asyncio.fixture(scope="session")
 async def schema_ready():
     await init_db()
     async with AsyncSessionLocal() as db:
         await db.execute(text(DEVICE_RECEIPTS_DDL))
         await db.commit()
+        # 迁移文件是测试库 schema 的唯一来源，测试跑前必须已应用
+        for mig in ("003_robot_loop_up.sql", "004_business_up.sql"):
+            if os.path.exists(os.path.join(ROOT, "migrations", mig)):
+                await _apply_migration(db, mig)
     return True
 
 
@@ -121,3 +177,7 @@ async def make_user(schema_ready):
 
 def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+# 供所有测试模块共用的隔离数据夹具（tests/iso_fx.py）
+from tests.iso_fx import IsoFixture, iso  # noqa: E402,F401

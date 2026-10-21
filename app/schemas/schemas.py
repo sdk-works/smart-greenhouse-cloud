@@ -23,9 +23,12 @@ class DeviceStatusEnum(str, Enum):
 
 
 class TaskStatusEnum(str, Enum):
+    """M2 巡检任务状态机（流转规则见 app/core/task_state.py）。"""
     PENDING   = "pending"
     RUNNING   = "running"
+    PAUSED    = "paused"
     COMPLETED = "completed"
+    PARTIAL   = "partial"
     FAILED    = "failed"
     CANCELLED = "cancelled"
 
@@ -215,6 +218,9 @@ class ImageResponse(BaseModel):
     device_id:     str
     task_id:       Optional[str]   = None
     greenhouse_id: Optional[str]   = None
+    # M2：点位归属（解析不出为 None，表示待确认）
+    point_id:      Optional[str]   = None
+    map_version_id: Optional[str]  = None
     filename:      Optional[str]   = None
     storage_url:   str
     thumbnail_url: Optional[str]   = None
