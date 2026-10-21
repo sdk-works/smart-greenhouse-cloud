@@ -23,7 +23,7 @@ from app.core.redis import CacheService, get_redis
 from app.models.models import (
     Device, Telemetry, DeviceStatus, MappingSyncStatus, ActuatorCommand,
     ActuatorProfile, CommandStatus, NavPointDiscovery, RobotPointConfigRelease,
-    InspectionBatch, InspectionVisit,
+    InspectionBatch, InspectionVisit, Greenhouse, RawMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -534,6 +534,8 @@ class MQTTService:
             device.last_seen = datetime.now(timezone.utc)
 
             greenhouse_id = device.greenhouse_id
+            gh_row = await db.get(Greenhouse, greenhouse_id) if greenhouse_id else None
+            company_id = gh_row.company_id if gh_row else None
 
             # 契约 §3.2 顺序与字段映射
             t = Telemetry(
@@ -555,6 +557,8 @@ class MQTTService:
                 light_intensity  = data.get("light"),
                 co2_level        = data.get("co2"),
                 ph_value         = data.get("ph"),
+                company_id       = company_id,
+                attribution_status = "resolved" if greenhouse_id else "pending",
                 raw_data         = payload,
             )
             db.add(t)
@@ -563,6 +567,17 @@ class MQTTService:
                 'INSERT INTO device_receipts(device_id,msg_id,digest,kind) VALUES(:d,:m,:g,:k)'),
                 {'d': device_id, 'm': msg_id, 'g': digest, 'k': 'telemetry'})
             await db.commit()
+
+            try:
+                async with AsyncSessionLocal() as rdb:
+                    rdb.add(RawMessage(
+                        msg_id=msg_id, source="mqtt", device_id=device_id,
+                        received_at=received_at, payload=payload,
+                        payload_bytes=len(json.dumps(payload, ensure_ascii=False)),
+                        parse_status="stored", parser_version="v1"))
+                    await rdb.commit()
+            except Exception as e:
+                logger.warning(f"[RAW] 原始报文记录失败: {e}")
 
         await self._publish_device_ack(device_id, msg_id, "stored")
         await self._push_realtime(device_id, greenhouse_id, received_at, data, {}, None)

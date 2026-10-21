@@ -1,17 +1,15 @@
 """
-workbench.py — 大棚工作台 API（按前端真实契约实现）
+workbench.py — 大棚工作台 API（v2：点位独立于机器人、绑定为投影）
 
-前端契约来源（编译产物 source map 中的原始源码）：
-  - pages/GreenhouseWorkbench.js  → GET /workbench/greenhouses/{id}
-      { profile:{...}, map:{revision,layout,points,defaults,next_name}, latest:{[pointId]:obs} }
-  - 同上                          → POST /workbench/greenhouses   → { greenhouse_id }
-  - 同上                          → PUT  /workbench/greenhouses/{id}/profile  ({...,revision})
-  - pages/PointDetail.js          → GET  /workbench/greenhouses/{id}/points/{pointId}?days=N
-      { point:{...}, observations:[{values,quality,captured_at,...}], total, truncated,
-        position_history, photos, photo_total, visits }
+契约（前端 pages/GreenhouseWorkbench.js / PointDetail.js）：
+  GET /workbench/greenhouses/{id} -> {profile, map:{revision,layout,defaults,next_name,points}, latest}
+  POST /workbench/greenhouses    -> {greenhouse_id}
+  PUT  /workbench/greenhouses/{id}/profile
+  GET  /workbench/greenhouses/{id}/points/{pointId}?days=N
 
-地图文档（layout/points/defaults/revision）统一由 app.core.map_doc 读写，
-存储于 greenhouses.map_data(JSON)。
+点位：inspection_points（稳定，独立于机器人）
+绑定：robot_point_mappings（point_id ↔ robot_id/nav_point_code，支持一点多机器人）
+布局/默认值/修订号：greenhouses.map_data
 """
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -22,18 +20,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import check_permission, get_current_user
+from app.core.company_scope import (DEFAULT_BASE_ID, can_access_company,
+                                   resolve_company_id)
 from app.core.database import get_db
-from app.core.map_doc import (
-    DEFAULT_DEFAULTS,
-    DEFAULT_LAYOUT,
-    MAX_POINTS,
-    apply_document,
-    bump,
-    new_point_id,
-    normalize_doc,
-    to_public,
-)
-from app.models.models import Device, Greenhouse, InspectionVisit, Telemetry, User
+from app.core.map_doc import DEFAULT_DEFAULTS, DEFAULT_LAYOUT, normalize_doc
+from app.models.models import (Device, Greenhouse, InspectionPoint,
+                               InspectionVisit, RobotPointMapping, Telemetry,
+                               User)
 
 router = APIRouter()
 
@@ -45,7 +38,6 @@ SOIL_FIELDS = [
 OBS_LIMIT = 500
 
 
-# ── Pydantic ──────────────────────────────────────────────────
 class WorkbenchCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     location: Optional[str] = Field(default=None, max_length=200)
@@ -54,6 +46,7 @@ class WorkbenchCreate(BaseModel):
     structure: Optional[str] = Field(default="solar", max_length=40)
     covering: Optional[str] = Field(default="film", max_length=40)
     actual_area: Optional[float] = Field(default=None, ge=0)
+    coord_unit: Optional[str] = Field(default="schematic", max_length=20)
     layout: Optional[Dict[str, Any]] = None
     defaults: Optional[Dict[str, Any]] = None
 
@@ -69,7 +62,6 @@ class WorkbenchProfileUpdate(BaseModel):
     revision: Optional[int] = Field(default=None, ge=0)
 
 
-# ── 辅助 ──────────────────────────────────────────────────────
 def _merge(base: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     out = dict(base)
     if isinstance(override, dict):
@@ -100,6 +92,58 @@ def _observation(t: Telemetry) -> Dict[str, Any]:
         "sample_count": t.sample_count,
         "position": {"x": t.position_x, "y": t.position_y},
     }
+
+
+def _binding_view(m: Optional[RobotPointMapping], point_name: str) -> Optional[Dict[str, Any]]:
+    if m is None:
+        return None
+    return {
+        "robot_id": m.robot_id,
+        "nav_point_code": m.nav_point_code,
+        "mapping_id": m.id,
+        "point_name": point_name,
+    }
+
+
+async def _load_points(db: AsyncSession, gh: Greenhouse,
+                       doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows = (await db.execute(
+        select(InspectionPoint).where(
+            InspectionPoint.greenhouse_id == gh.id,
+            InspectionPoint.retired_at.is_(None),
+        ).order_by(InspectionPoint.created_at)
+    )).scalars().all()
+    maps = (await db.execute(
+        select(RobotPointMapping).where(
+            RobotPointMapping.greenhouse_id == gh.id,
+            RobotPointMapping.effective_to.is_(None),
+        )
+    )).scalars().all()
+    by_point: Dict[str, List[RobotPointMapping]] = {}
+    for m in maps:
+        by_point.setdefault(m.point_id, []).append(m)
+
+    d = doc["defaults"]
+    points: List[Dict[str, Any]] = []
+    for p in rows:
+        ms = by_point.get(p.id, [])
+        primary = ms[0] if ms else None
+        points.append({
+            "id": p.id,
+            "point_name": p.name,
+            "zone": p.zone or "",
+            "x": p.x,
+            "y": p.y,
+            "note": "",
+            "sample_seconds": primary.sample_seconds if primary else d.get("sample_seconds"),
+            "collect_soil": primary.collect_soil if primary else d.get("collect_soil"),
+            "collect_environment": primary.collect_environment if primary else d.get("collect_environment"),
+            "take_photo": primary.take_photo if primary else d.get("take_photo"),
+            "enabled": primary.enabled if primary else d.get("enabled"),
+            "binding": _binding_view(primary, p.name),
+            "bindings": [_binding_view(m, p.name) for m in ms],
+        })
+    return points
 
 
 async def _latest_by_point(db: AsyncSession, gh_id: str,
@@ -136,34 +180,29 @@ def _profile(gh: Greenhouse, doc: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def _workbench_payload(db: AsyncSession, gh: Greenhouse) -> Dict[str, Any]:
+async def _payload(db: AsyncSession, gh: Greenhouse) -> Dict[str, Any]:
     doc = normalize_doc(gh.map_data)
+    points = await _load_points(db, gh, doc)
     return {
         "profile": _profile(gh, doc),
-        "map": to_public(doc),
-        "latest": await _latest_by_point(db, gh.id, doc["points"]),
+        "map": {
+            "revision": int(doc.get("revision") or 0),
+            "layout": doc["layout"],
+            "defaults": doc["defaults"],
+            "next_name": doc["next_name"],
+            "points": points,
+        },
+        "latest": await _latest_by_point(db, gh.id, points),
     }
 
 
-async def _get_or_404(db: AsyncSession, greenhouse_id: str) -> Greenhouse:
+async def _get_scoped(db: AsyncSession, greenhouse_id: str, user: User) -> Greenhouse:
     gh = await db.get(Greenhouse, greenhouse_id)
-    if not gh:
+    if not gh or not can_access_company(user, gh.company_id):
         raise HTTPException(status_code=404, detail="大棚不存在")
     return gh
 
 
-def _find_point(doc: Dict[str, Any], point_id: str) -> Optional[Dict[str, Any]]:
-    needle = (point_id or "").strip()
-    for p in doc["points"]:
-        if p.get("id") == needle:
-            return p
-    for p in doc["points"]:
-        if str(p.get("point_name")) == needle:
-            return p
-    return None
-
-
-# ── 接口 ──────────────────────────────────────────────────────
 @router.post("/greenhouses", status_code=status.HTTP_201_CREATED)
 async def create_workbench_greenhouse(
     payload: WorkbenchCreate,
@@ -186,12 +225,14 @@ async def create_workbench_greenhouse(
         crop_type=payload.crop_type,
         description=payload.description,
         area=payload.actual_area,
+        coord_unit=payload.coord_unit or "schematic",
+        company_id=resolve_company_id(user),
+        base_id=DEFAULT_BASE_ID,
         map_data=normalize_doc(raw),
     )
     db.add(gh)
     await db.commit()
     await db.refresh(gh)
-    # 前端创建后读取 r.data.greenhouse_id 跳转工作台
     return {"greenhouse_id": gh.id}
 
 
@@ -202,8 +243,8 @@ async def get_workbench_greenhouse(
     user: User = Depends(get_current_user),
 ):
     check_permission(user, "view_data")
-    gh = await _get_or_404(db, greenhouse_id)
-    return await _workbench_payload(db, gh)
+    gh = await _get_scoped(db, greenhouse_id, user)
+    return await _payload(db, gh)
 
 
 @router.put("/greenhouses/{greenhouse_id}/profile")
@@ -214,7 +255,7 @@ async def update_workbench_profile(
     user: User = Depends(get_current_user),
 ):
     check_permission(user, "manage_greenhouses")
-    gh = await _get_or_404(db, greenhouse_id)
+    gh = await _get_scoped(db, greenhouse_id, user)
     doc = normalize_doc(gh.map_data)
 
     if payload.revision is not None and int(payload.revision) != int(doc.get("revision") or 0):
@@ -239,7 +280,7 @@ async def update_workbench_profile(
     if data.get("covering"):
         doc["covering"] = data["covering"]
 
-    doc = bump(doc)
+    doc["revision"] = int(doc.get("revision") or 0) + 1
     gh.map_data = doc
     await db.commit()
     await db.refresh(gh)
@@ -255,39 +296,42 @@ async def get_workbench_point(
     user: User = Depends(get_current_user),
 ):
     check_permission(user, "view_data")
-    gh = await _get_or_404(db, greenhouse_id)
-    doc = normalize_doc(gh.map_data)
+    gh = await _get_scoped(db, greenhouse_id, user)
 
-    point = _find_point(doc, point_id)
+    point = (await db.execute(
+        select(InspectionPoint).where(
+            InspectionPoint.greenhouse_id == gh.id,
+            or_(InspectionPoint.id == point_id, InspectionPoint.name == point_id),
+        )
+    )).scalars().first()
     if point is None:
         raise HTTPException(status_code=404, detail=f"点位不存在：{point_id}")
 
-    binding = point.get("binding") or {}
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    mappings = (await db.execute(
+        select(RobotPointMapping).where(
+            RobotPointMapping.point_id == point.id,
+            RobotPointMapping.effective_to.is_(None),
+        )
+    )).scalars().all()
+    primary = mappings[0] if mappings else None
 
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     conds = [Telemetry.greenhouse_id == gh.id, Telemetry.timestamp >= since]
-    nav_code = binding.get("nav_point_code")
-    if nav_code:
+    if primary is not None:
         conds.append(or_(
-            Telemetry.mapping_id == binding.get("mapping_id"),
-            Telemetry.greenhouse_point == nav_code,
-            Telemetry.greenhouse_point == point.get("point_name"),
+            Telemetry.mapping_id == primary.id,
+            Telemetry.greenhouse_point == primary.nav_point_code,
+            Telemetry.greenhouse_point == point.name,
         ))
     else:
-        conds.append(Telemetry.greenhouse_point == point.get("point_name"))
+        conds.append(Telemetry.greenhouse_point == point.name)
 
-    total = (await db.execute(
-        select(func.count(Telemetry.id)).where(*conds)
-    )).scalar() or 0
-
+    total = (await db.execute(select(func.count(Telemetry.id)).where(*conds))).scalar() or 0
     rows = (await db.execute(
-        select(Telemetry).where(*conds)
-        .order_by(Telemetry.timestamp.desc()).limit(OBS_LIMIT)
+        select(Telemetry).where(*conds).order_by(Telemetry.timestamp.desc()).limit(OBS_LIMIT)
     )).scalars().all()
-
     observations = [_observation(t) for t in rows]
 
-    # 位置历史（用于提示"坐标曾调整"）：按出现顺序去重
     seen = set()
     position_history: List[Dict[str, Any]] = []
     for t in rows:
@@ -299,25 +343,35 @@ async def get_workbench_point(
         seen.add(key)
         position_history.append({"x": t.position_x, "y": t.position_y})
     if not position_history:
-        position_history = [{"x": point.get("x"), "y": point.get("y")}]
+        position_history = [{"x": point.x, "y": point.y}]
 
     visits: List[Dict[str, Any]] = []
-    if nav_code:
+    if primary is not None:
         vrows = (await db.execute(
             select(InspectionVisit).where(
                 InspectionVisit.greenhouse_id == gh.id,
-                InspectionVisit.nav_point_code == nav_code,
+                InspectionVisit.nav_point_code == primary.nav_point_code,
             ).order_by(InspectionVisit.arrived_at.desc()).limit(100)
         )).scalars().all()
-        visits = [{
-            "id": v.id,
-            "arrived_at": v.arrived_at,
-            "status": v.status,
-            "error_code": v.error_code,
-        } for v in vrows]
+        visits = [{"id": v.id, "arrived_at": v.arrived_at,
+                   "status": v.status, "error_code": v.error_code} for v in vrows]
 
     return {
-        "point": point,
+        "point": {
+            "id": point.id,
+            "point_name": point.name,
+            "zone": point.zone or "",
+            "x": point.x,
+            "y": point.y,
+            "note": "",
+            "sample_seconds": primary.sample_seconds if primary else None,
+            "collect_soil": primary.collect_soil if primary else None,
+            "collect_environment": primary.collect_environment if primary else None,
+            "take_photo": primary.take_photo if primary else None,
+            "enabled": primary.enabled if primary else None,
+            "binding": _binding_view(primary, point.name),
+            "bindings": [_binding_view(m, point.name) for m in mappings],
+        },
         "observations": observations,
         "total": int(total),
         "truncated": total > OBS_LIMIT,

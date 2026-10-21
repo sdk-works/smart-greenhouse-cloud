@@ -10,7 +10,7 @@
 """
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -34,11 +34,17 @@ DEFAULTS = {"sample_seconds": 20, "collect_soil": True,
 
 
 async def _purge(gh_id: str, robot_id: str):
+    from app.models.models import InspectionPoint, RobotPointMapping
     async with AsyncSessionLocal() as db:
         cfgs = (await db.execute(select(RobotPointConfig).where(
             RobotPointConfig.robot_id == robot_id))).scalars().all()
         for c in cfgs:
             await db.delete(c)
+        await db.flush()
+        await db.execute(delete(RobotPointMapping).where(
+            RobotPointMapping.greenhouse_id == gh_id))
+        await db.execute(delete(InspectionPoint).where(
+            InspectionPoint.greenhouse_id == gh_id))
         row = (await db.execute(select(Greenhouse).where(
             Greenhouse.id == gh_id))).scalar_one_or_none()
         if row:
@@ -107,15 +113,17 @@ async def test_map_layout_and_binding_persist(client, make_user):
     gh_id = r.json()["greenhouse_id"]
 
     try:
+        pid1 = f"p1-{uuid.uuid4().hex[:10]}"
+        pid2 = f"p2-{uuid.uuid4().hex[:10]}"
         doc = {
             "revision": 1,
             "layout": LAYOUT,
             "defaults": DEFAULTS,
             "next_name": "A3",
             "points": [
-                {"id": "p-1", "point_name": "A1", "zone": "中区", "x": 10, "y": 20,
+                {"id": pid1, "point_name": "A1", "zone": "中区", "x": 10, "y": 20,
                  "note": "", **DEFAULTS},
-                {"id": "p-2", "point_name": "A2", "zone": "北区", "x": 30, "y": 40,
+                {"id": pid2, "point_name": "A2", "zone": "北区", "x": 30, "y": 40,
                  "note": "", **DEFAULTS},
             ],
         }
@@ -129,9 +137,13 @@ async def test_map_layout_and_binding_persist(client, make_user):
         assert [p["point_name"] for p in m2.json()["points"]] == ["A1", "A2"]
 
         async with AsyncSessionLocal() as db:
+            from app.models.models import InspectionPoint
             row = await db.get(Greenhouse, gh_id)
-            assert (row.map_data or {}).get("points"), "map_data 必须真的落库"
             assert row.map_data["layout"]["width"] == 100
+            pts = (await db.execute(select(InspectionPoint).where(
+                InspectionPoint.greenhouse_id == gh_id,
+                InspectionPoint.retired_at.is_(None)))).scalars().all()
+            assert len(pts) == 2, "点位必须落入 inspection_points"
 
         # 工作台 GET 也要能看到点位
         w = await client.get(f"{WB}/{gh_id}", headers=auth(token))
@@ -139,18 +151,18 @@ async def test_map_layout_and_binding_persist(client, make_user):
         assert [p["point_name"] for p in w.json()["map"]["points"]] == ["A1", "A2"]
 
         # 点位详情（按 id）
-        d = await client.get(f"{WB}/{gh_id}/points/p-1", headers=auth(token))
+        d = await client.get(f"{WB}/{gh_id}/points/{pid1}", headers=auth(token))
         assert d.status_code == 200, d.text
         assert d.json()["point"]["point_name"] == "A1"
         assert d.json()["point"]["x"] == 10
         assert d.json()["observations"] == []
 
         # 绑定：点位 p-1 ↔ 机器人导航点 A点
-        b = await client.put(f"{PC}/maps/{gh_id}/points/p-1/binding",
+        b = await client.put(f"{PC}/maps/{gh_id}/points/{pid1}/binding",
                              json={"revision": 2, "robot_id": ROBOT, "nav_point_code": "A点"},
                              headers=auth(token))
         assert b.status_code == 200, b.text
-        bound = next(p for p in b.json()["points"] if p["id"] == "p-1")
+        bound = next(p for p in b.json()["points"] if p["id"] == pid1)
         assert bound["binding"]["nav_point_code"] == "A点"
 
         async with AsyncSessionLocal() as db:
@@ -162,7 +174,7 @@ async def test_map_layout_and_binding_persist(client, make_user):
             assert cfg.point_name == "A1"
 
         # 绑定后点位详情应带出 binding
-        d2 = await client.get(f"{WB}/{gh_id}/points/p-1", headers=auth(token))
+        d2 = await client.get(f"{WB}/{gh_id}/points/{pid1}", headers=auth(token))
         assert d2.status_code == 200, d2.text
         binding = d2.json()["point"]["binding"]
         assert binding is not None and binding["robot_id"] == ROBOT

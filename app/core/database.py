@@ -38,3 +38,20 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # 确保默认公司/基地存在（第一批迁移后的新库与测试库都需要）
+    try:
+        from sqlalchemy import select
+        from app.core.company_scope import DEFAULT_BASE_ID, DEFAULT_COMPANY_ID
+        from app.models.models import Company, SiteBase
+        async with AsyncSessionLocal() as _db:
+            exists = (await _db.execute(
+                select(Company).where(Company.id == DEFAULT_COMPANY_ID)
+            )).scalars().first()
+            if not exists:
+                _db.add(Company(id=DEFAULT_COMPANY_ID, name="默认公司"))
+                _db.add(SiteBase(id=DEFAULT_BASE_ID, company_id=DEFAULT_COMPANY_ID,
+                                 name="默认基地"))
+                await _db.commit()
+    except Exception as _e:  # 不阻断启动；迁移已 seed 时也走不到这里
+        import logging
+        logging.getLogger(__name__).warning(f"默认公司/基地初始化跳过: {_e}")

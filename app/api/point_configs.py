@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import check_permission, get_current_user
 from app.core.database import get_db
-from app.core.map_doc import (MAX_POINTS, apply_document, bump,
-                              normalize_doc, to_public)
-from app.models.models import (Device, Greenhouse, InspectionVisit, NavPointDiscovery,
-                               RobotPointConfig, RobotPointConfigRelease, Telemetry, User)
+from app.core.map_doc import MAX_POINTS, normalize_doc
+from app.core.point_service import apply_points, bind, load_points, unbind
+from app.models.models import (Device, Greenhouse, InspectionPoint, InspectionVisit,
+                               NavPointDiscovery, RobotPointConfig,
+                               RobotPointConfigRelease, Telemetry, User)
 from app.mqtt.mqtt_service import mqtt_service
 
 router = APIRouter()
@@ -202,13 +203,17 @@ async def publish(robot_id: str, request: PublishIn,
 @router.get("/maps/{greenhouse_id}")
 async def get_map(greenhouse_id: str, db: AsyncSession = Depends(get_db),
                   _: User = Depends(get_current_user)):
-    """返回前端地图文档：{revision, layout, points, defaults, next_name}。"""
+    """返回地图文档：{revision, layout, points, defaults, next_name}（points 来自 inspection_points）。"""
     check_permission(_, "view_point_mapping")
     gh = await db.get(Greenhouse, greenhouse_id)
     if not gh:
         raise HTTPException(404, "大棚不存在")
     doc = normalize_doc(gh.map_data)
-    return {"greenhouse_id": gh.id, "greenhouse_name": gh.name, **to_public(doc)}
+    points = await load_points(db, gh, doc)
+    return {"greenhouse_id": gh.id, "greenhouse_name": gh.name,
+            "revision": int(doc.get("revision") or 0),
+            "layout": doc["layout"], "defaults": doc["defaults"],
+            "next_name": doc["next_name"], "points": points}
 
 
 class MapDocIn(BaseModel):
@@ -232,21 +237,37 @@ async def put_map(greenhouse_id: str, payload: MapDocIn,
     if not gh:
         raise HTTPException(404, "大棚不存在")
 
-    cur = normalize_doc(gh.map_data)
-    if payload.revision is not None and int(payload.revision) != int(cur.get("revision") or 0):
+    doc = normalize_doc(gh.map_data)
+    if payload.revision is not None and int(payload.revision) != int(doc.get("revision") or 0):
         raise HTTPException(409, "地图已被他人修改，请重新加载后再保存")
 
-    doc = apply_document(cur, payload.model_dump(exclude_none=True))
-    doc = bump(doc)
+    await apply_points(db, gh, doc, payload.points)
+    if payload.layout:
+        doc["layout"] = {**doc["layout"], **{k: v for k, v in payload.layout.items() if v is not None}}
+    if payload.defaults:
+        doc["defaults"] = {**doc["defaults"], **{k: v for k, v in payload.defaults.items() if v is not None}}
+    if payload.next_name:
+        doc["next_name"] = payload.next_name
+    if payload.structure:
+        doc["structure"] = payload.structure
+    if payload.covering:
+        doc["covering"] = payload.covering
+    doc["revision"] = int(doc.get("revision") or 0) + 1
     gh.map_data = doc
     await db.commit()
     await db.refresh(gh)
-    return {"greenhouse_id": gh.id, "greenhouse_name": gh.name, **to_public(doc)}
+
+    points = await load_points(db, gh, doc)
+    return {"greenhouse_id": gh.id, "greenhouse_name": gh.name,
+            "revision": doc["revision"], "layout": doc["layout"],
+            "defaults": doc["defaults"], "next_name": doc["next_name"],
+            "points": points}
 
 
 class BindingIn2(BaseModel):
     revision: Optional[int] = Field(default=None, ge=0)
     robot_id: str = Field(max_length=100)
+    robot_map_version: Optional[str] = Field(default=None, max_length=64)
     nav_point_code: Optional[str] = Field(default=None, max_length=64)
 
 
@@ -254,66 +275,39 @@ class BindingIn2(BaseModel):
 async def bind_point(greenhouse_id: str, point_id: str, payload: BindingIn2,
                      db: AsyncSession = Depends(get_db),
                      _: User = Depends(get_current_user)):
-    """按点位 id 关联/解除机器人导航编号；同时同步 robot_point_configs。"""
+    """按稳定点位 id 关联/解除机器人导航编号。"""
     check_permission(_, "edit_point_mapping")
     gh = await db.get(Greenhouse, greenhouse_id)
     if not gh:
         raise HTTPException(404, "大棚不存在")
 
-    cur = normalize_doc(gh.map_data)
-    if payload.revision is not None and int(payload.revision) != int(cur.get("revision") or 0):
+    doc = normalize_doc(gh.map_data)
+    if payload.revision is not None and int(payload.revision) != int(doc.get("revision") or 0):
         raise HTTPException(409, "地图已被他人修改，请重新加载后再保存")
 
-    target = next((p for p in cur["points"] if p.get("id") == point_id), None)
-    if target is None:
+    point = (await db.execute(select(InspectionPoint).where(
+        InspectionPoint.id == point_id,
+        InspectionPoint.greenhouse_id == gh.id,
+    ))).scalars().first()
+    if point is None:
         raise HTTPException(404, "点位不存在")
 
-    code = (payload.nav_point_code or "").strip()
-    if not code:
-        old = target.get("binding") or {}
-        old_code = old.get("nav_point_code")
-        if old_code:
-            row = (await db.execute(select(RobotPointConfig).where(
-                RobotPointConfig.robot_id == (old.get("robot_id") or payload.robot_id),
-                RobotPointConfig.nav_point_code == old_code))).scalar_one_or_none()
-            if row:
-                await db.delete(row)
-        target["binding"] = None
+    if (payload.nav_point_code or "").strip():
+        await bind(db, gh, point, payload.robot_id, payload.robot_map_version,
+                   payload.nav_point_code, doc["defaults"])
     else:
-        row = (await db.execute(select(RobotPointConfig).where(
-            RobotPointConfig.robot_id == payload.robot_id,
-            RobotPointConfig.nav_point_code == code))).scalar_one_or_none()
-        if row and row.greenhouse_id != gh.id:
-            raise HTTPException(409, "该导航点已绑定到其它大棚的点位，请先解除原绑定")
-        if not row:
-            row = RobotPointConfig(robot_id=payload.robot_id, nav_point_code=code)
-            db.add(row)
-        row.greenhouse_id = gh.id
-        row.point_name = target.get("point_name") or code
-        row.sample_seconds = int(target.get("sample_seconds") or 10)
-        row.collect_soil = bool(target.get("collect_soil", True))
-        row.collect_environment = bool(target.get("collect_environment", True))
-        row.take_photo = bool(target.get("take_photo", True))
-        row.enabled = bool(target.get("enabled", True))
-        row.note = target.get("note")
-        await db.flush()
-        target["binding"] = {
-            "robot_id": row.robot_id,
-            "nav_point_code": row.nav_point_code,
-            "mapping_id": row.id,
-            "point_name": row.point_name,
-        }
-        disc = (await db.execute(select(NavPointDiscovery).where(
-            NavPointDiscovery.robot_id == payload.robot_id,
-            NavPointDiscovery.nav_point_code == code))).scalar_one_or_none()
-        if disc:
-            disc.status = "assigned"
+        await unbind(db, gh, point, payload.robot_id)
 
-    doc = bump(cur)
+    doc["revision"] = int(doc.get("revision") or 0) + 1
     gh.map_data = doc
     await db.commit()
     await db.refresh(gh)
-    return {"greenhouse_id": gh.id, "greenhouse_name": gh.name, **to_public(doc)}
+
+    points = await load_points(db, gh, doc)
+    return {"greenhouse_id": gh.id, "greenhouse_name": gh.name,
+            "revision": doc["revision"], "layout": doc["layout"],
+            "defaults": doc["defaults"], "next_name": doc["next_name"],
+            "points": points}
 
 
 @router.get("/map-monitor/{robot_id}")
