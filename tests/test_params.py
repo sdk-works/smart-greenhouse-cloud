@@ -50,7 +50,7 @@ async def test_create_empty_name_is_422(client, make_user):
 
 async def test_create_negative_area_is_422(client, make_user):
     _, token = await make_user(UserRole.ADMIN)
-    r = await client.post(WB, json={"name": "bad-area", "area": -1}, headers=auth(token))
+    r = await client.post(WB, json={"name": "bad-area", "actual_area": -1}, headers=auth(token))
     assert r.status_code == 422, r.text
 
 
@@ -58,7 +58,7 @@ async def test_profile_empty_body_is_400(client, make_user):
     _, token = await make_user(UserRole.ADMIN)
     r = await client.post(WB, json={"name": "params-empty-body"}, headers=auth(token))
     assert r.status_code == 201, r.text
-    gh_id = r.json()["id"]
+    gh_id = r.json()["greenhouse_id"]
     try:
         r2 = await client.put(f"{WB}/{gh_id}/profile", json={}, headers=auth(token))
         assert r2.status_code == 400, r2.text
@@ -82,7 +82,7 @@ async def test_map_monitor_limit_out_of_range_is_422(client, make_user):
 
 async def test_put_map_too_many_waypoints_is_400(client, make_user):
     _, token = await make_user(UserRole.ADMIN)
-    payload = {"waypoints": [{"x": 1, "y": 1} for _ in range(501)]}
+    payload = {"revision": 0, "points": [{"point_name": f"P{i}", "x": 1, "y": 1} for i in range(501)]}
     r = await client.put(f"{PC}/maps/{uuid.uuid4()}", json=payload, headers=auth(token))
     # 目标大棚不存在 → 404；存在 → 400 数量超限。两者都必须是 4xx 且 detail 可读。
     assert r.status_code in (400, 404), r.text
