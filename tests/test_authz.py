@@ -101,7 +101,7 @@ async def test_admin_can_create_greenhouse(client, make_user):
     _, token = await make_user(UserRole.ADMIN)
     r = await client.post(WB, json={"name": "authz-ok"}, headers=auth(token))
     assert r.status_code == 201, r.text
-    gh_id = r.json()["id"]
+    gh_id = r.json()["greenhouse_id"]
     try:
         async with AsyncSessionLocal() as db:
             row = (await db.execute(
