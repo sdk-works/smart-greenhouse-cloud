@@ -4,6 +4,17 @@
 -- ============================================================
 BEGIN;
 
+-- 回填结果回退：只回退本迁移标记过的行，恢复为 NULL（不可判定态）
+UPDATE telemetry
+   SET attribution_status = NULL,
+       attribution_reason = NULL,
+       binding_id         = NULL,
+       binding_version    = NULL
+ WHERE attribution_reason = 'backfill_binding_window';
+
+DROP TABLE IF EXISTS attribution_migrations;
+
+
 DROP TABLE IF EXISTS alerts;
 DROP TABLE IF EXISTS incident_events;
 DROP TABLE IF EXISTS incidents;

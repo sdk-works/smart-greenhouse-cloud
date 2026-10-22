@@ -11,10 +11,74 @@ ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS attribution_reason VARCHAR(40);
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS binding_id        VARCHAR(36);
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS binding_version   INTEGER;
 
--- 历史行补默认：此前一律按设备当前大棚归属，这里如实标注为"未经绑定窗口确认"
-UPDATE telemetry SET attribution_status = 'pending',
-                     attribution_reason = 'legacy_before_attribution'
-  WHERE attribution_status IS NULL;
+-- 历史 NULL 行回填：**先证据、后标记**，不再一律置 pending。
+-- 依据 device_bindings 的绑定窗口（device_id + greenhouse_id + start_at/end_at）：
+--   1a) 有绑定窗口覆盖 → resolved，reason=backfill_binding_window，并记 binding_id/version
+--   1b) 无窗口覆盖     → pending，reason=legacy_before_attribution（不猜历史归属）
+--   两种情况都写入 attribution_migrations，数量、规则、时间可审计，可回滚
+CREATE TABLE IF NOT EXISTS attribution_migrations (
+  id            VARCHAR(36) PRIMARY KEY,
+  code          VARCHAR(60) NOT NULL,
+  rule          VARCHAR(80) NOT NULL,
+  rows_affected INTEGER NOT NULL DEFAULT 0,
+  detail        JSON DEFAULT '{}',
+  executed_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_attribution_migrations_code
+  ON attribution_migrations(code);
+
+WITH covered AS (
+  SELECT t.id AS telemetry_id, b.id AS binding_id, b.binding_version
+    FROM telemetry t
+    JOIN device_bindings b
+      ON b.device_id     = t.device_id
+     AND b.greenhouse_id = t.greenhouse_id
+     AND b.start_at     <= t.created_at
+     AND (b.end_at IS NULL OR b.end_at >= t.created_at)
+   WHERE t.attribution_status IS NULL
+     AND t.company_id IS NOT NULL          -- 公司为空视为证据不足，留给人工确认
+), upd AS (
+  UPDATE telemetry t
+     SET attribution_status = 'resolved',
+         attribution_reason = 'backfill_binding_window',
+         binding_id         = c.binding_id,
+         binding_version    = c.binding_version
+    FROM covered c
+   WHERE t.id = c.telemetry_id
+  RETURNING 1
+)
+INSERT INTO attribution_migrations (id, code, rule, rows_affected, detail)
+SELECT gen_random_uuid()::text, '004_backfill_null', 'binding_window', count(*),
+       json_build_object('status', 'resolved', 'source', 'device_bindings')
+  FROM upd;
+
+WITH upd AS (
+  UPDATE telemetry
+     SET attribution_status = 'pending',
+         attribution_reason = 'legacy_before_attribution'
+   WHERE attribution_status IS NULL
+  RETURNING 1
+)
+INSERT INTO attribution_migrations (id, code, rule, rows_affected, detail)
+SELECT gen_random_uuid()::text, '004_backfill_null', 'no_binding_window', count(*),
+       json_build_object('status', 'pending', 'source', 'none')
+  FROM upd;
+
+-- 自检：仅检查本次回填写入的行（reason=backfill_binding_window），
+-- 其 company 必须与棚室所属公司一致；不一致即中止整个事务（防止历史归属被扩大）。
+-- 说明：不用 status='resolved' 做条件——应用侧历史写入的 resolved 行不归本次迁移负责。
+DO $$
+DECLARE bad BIGINT;
+BEGIN
+  SELECT count(*) INTO bad
+    FROM telemetry t
+    JOIN greenhouses g ON g.id = t.greenhouse_id
+   WHERE t.attribution_reason = 'backfill_binding_window'
+     AND g.company_id IS DISTINCT FROM t.company_id;
+  IF bad > 0 THEN
+    RAISE EXCEPTION '归属自检失败：% 行 company 与棚室不一致，迁移已回滚', bad;
+  END IF;
+END $$;
 
 -- ── 2) incidents：异常事件单 ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS incidents (
