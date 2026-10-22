@@ -10,7 +10,7 @@ UPDATE telemetry
        attribution_reason = NULL,
        binding_id         = NULL,
        binding_version    = NULL
- WHERE attribution_reason = 'backfill_binding_window';
+ WHERE attribution_reason IN ('backfill_sample_time','backfill_receive_time_estimated');
 
 DROP TABLE IF EXISTS attribution_migrations;
 
