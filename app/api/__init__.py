@@ -3,11 +3,12 @@ api/__init__.py — 路由统一注册
 
 安全基线（2026-10-17）：
   - 除 /auth 下的公开端点（login / logout / init-admin）外，所有业务 API 强制登录鉴权。
-  - WebSocket 走 ?token= 查询参数鉴权（浏览器 WS 无法自定义 Header）。
+  - WebSocket 走 ?token= 查询参数鉴权（浏览器 WS 无法自定义 Header）；
+    鉴权在 app/api/ws.py 端点内部完成（先 accept 再 close 4401/4403），
+    不在路由级依赖里做——依赖报错发生在握手前，浏览器只会看到 1006。
   - 细粒度 RBAC 由各路由内 check_permission 负责；这里保证"必须已登录"。
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import Optional
+from fastapi import APIRouter, Depends
 
 from app.api import (
     greenhouses, devices, telemetry, tasks, images,
@@ -16,22 +17,8 @@ from app.api import (
     workbench,
 )
 from app.api.auth import get_current_user
-from app.core.redis import get_redis
 
 api_router = APIRouter()
-
-
-# ── WebSocket 鉴权：token 走查询参数 ───────────────────────────
-async def ws_current_user(token: Optional[str] = Query(None)):
-    """浏览器 WebSocket 不能设置 Header，用 ?token= 校验；无效即拒绝握手。"""
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="WS 缺少 token")
-    redis = await get_redis()
-    user_id = await redis.get(f"auth:token:{token}")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="WS token 无效")
-    await redis.expire(f"auth:token:{token}", 8 * 60 * 60)
-    return user_id
 
 
 # ── 业务路由：统一强制登录（auth 前缀除外） ────────────────────
@@ -57,9 +44,12 @@ for _r, _prefix, _tag, _secure in _ROUTERS:
     api_router.include_router(_r, prefix=_prefix, tags=[_tag], dependencies=_deps)
 
 # WebSocket 单独挂载（鉴权方式与 HTTP 不同）
-api_router.include_router(
-    ws.router, prefix="/ws", tags=["WebSocket"], dependencies=[Depends(ws_current_user)]
-)
+# 【2026-10-22 浏览器实测修正】不再挂 ws_current_user 依赖。
+#   FastAPI 的依赖报错发生在握手之前，Starlette 会直接断开、不发 accept，
+#   浏览器只能看到 1006（异常关闭），拿不到 4401/4403，前端无法区分"未登录"和"连接坏了"。
+#   现在鉴权在 ws.py 端点内部完成：先 accept 再 close(4401/4403)，客户端能读到关闭码。
+#   uvicorn 日志里的 "ASGI callable returned without sending handshake" 也随之消失。
+api_router.include_router(ws.router, prefix="/ws", tags=["WebSocket"])
 
 # ── 尾斜杠兼容：为带 "/" 的路由额外注册无尾斜杠副本，消除 307 重定向 ──
 from fastapi.routing import APIRoute
