@@ -63,8 +63,12 @@
 
 ## 6. 未覆盖风险（上线前必须补）
 
-1. T4 页面**没有接入现有前端工程**，只提供了单文件静态页挂在 `/pages`；
-   要真正放进大棚详情页，需要前端把 `../greenhouses/{id}/status` 的数据接进去。
+1. T4 界面**没有合入前端工程**，只交付了两份可直接用的东西：
+   单文件静态页 `static/greenhouse_status.html`（挂 `/pages`，可独立打开验证），
+   和 React 组件 `frontend/GreenhouseStatusPanel.js`（与项目现有写法一致，
+   在 `GreenhouseWorkbench` 加一个 Tab 引入即可）。
+   组件语法已用 `@babel/parser(jsx)` 解析通过，**未做浏览器视觉验证**，
+   合入前端工程需要前端同学确认依赖（antd / `../services/api`）。
 2. `metric_definitions` 目前只有 8 条种子指标；设备上报的 `soil_nitrogen` 等若无定义就不会展示。
 3. 设备自报的 `valid` 位序与指标的对应关系**契约里没定义**，页面只报"几路未通过自检"，不指明是哪一路。
 4. T4 的"MQTT 已连接"依赖 Redis 在线缓存；若 MQTT 心跳没写缓存，会一直显示离线（只读实例上就是这样）。
