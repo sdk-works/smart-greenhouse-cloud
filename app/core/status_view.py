@@ -106,10 +106,11 @@ async def load_device_rows(db, greenhouse_id: str, device_ids: List[str],
 
 
 async def _identity_conflicts(db, device_ids: List[str]):
-    """身份冲突两类：
-      (a) 同一 msg_id 出现在多个设备下（重复身份）
-      (b) 上行自报的 device_id 在设备表里查无此人
-    returns (冲突文案 list, 重复明细 list)
+    """身份冲突：同一 msg_id 出现在多个设备下（重复身份）。
+
+    【为什么只查这一类】早先还查了"raw_messages 里自报了库里没有的设备名"，
+    但那条是全表扫描、**不带公司范围**，会把别家公司的报文当成本棚的冲突报出来，
+    既是噪音也是越界。删掉。要查未知设备另开带公司范围的接口。
     """
     if not device_ids:
         return [], []
@@ -119,12 +120,6 @@ async def _identity_conflicts(db, device_ids: List[str]):
         "HAVING count(DISTINCT device_id) > 1 ORDER BY msg_id LIMIT 20"),
         {"ids": device_ids})).all()
     conflicts = [f"msg_id {m} 同时出现在 {n} 个设备下" for m, n in dup]
-
-    unknown = (await db.execute(text(
-        "SELECT DISTINCT m.device_id FROM raw_messages m "
-        "LEFT JOIN devices d ON d.device_id = m.device_id "
-        "WHERE d.id IS NULL AND m.device_id IS NOT NULL LIMIT 20"))).all()
-    conflicts += [f"上行自报身份 {d[0]} 未登记为任何设备" for d in unknown]
     return conflicts, dup
 
 

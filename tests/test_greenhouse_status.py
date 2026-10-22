@@ -280,11 +280,12 @@ async def test_status_identity_conflict_detected(client, iso):
     await db.commit()
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as s2:
+        # 同一个 msg_id 被两个设备各写一条 —— 这就是"重复身份"
+        shared_msg_id = "IC/shared/1"
         for d in (dev, dev2):
-            msg_id = f"IC/shared/{d.device_id}"
             s2.add(Telemetry(id=str(uuid.uuid4()), device_id=d.id, greenhouse_id=gh.id,
                              timestamp=now, created_at=now, data_type="telemetry",
-                             msg_id=msg_id, temperature=20.0,
+                             msg_id=shared_msg_id, temperature=20.0,
                              company_id=gh.company_id))
         await s2.commit()
 
