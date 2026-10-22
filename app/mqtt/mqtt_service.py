@@ -621,6 +621,12 @@ class MQTTService:
         async with AsyncSessionLocal() as db:
             msg_id = payload.get("msg_id")
             if digest and await self._receipt_check(db, robot_id, msg_id, digest):
+                # 设备真的把同一 msg_id 又发了一次（回执表已存在）。
+                # device_receipts 主键是 (device_id,msg_id)，第二次到达根本插不进去，
+                # 库里看不出重复 —— 只有这条日志能证明"设备重发"。
+                # 观测器按 DUP-RECV 统计，与"同一行被重复扫描"(reread) 分开。
+                logger.info("[DUP-RECV] device=%s msg_id=%s 重复接收（首次已入库）",
+                            robot_id, msg_id)
                 return True
             if msg_id and not digest:
                 duplicate = await db.execute(

@@ -12,10 +12,22 @@ ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS binding_id        VARCHAR(36);
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS binding_version   INTEGER;
 
 -- 历史 NULL 行回填：**先证据、后标记**，不再一律置 pending。
--- 依据 device_bindings 的绑定窗口（device_id + greenhouse_id + start_at/end_at）：
---   1a) 有绑定窗口覆盖 → resolved，reason=backfill_binding_window，并记 binding_id/version
---   1b) 无窗口覆盖     → pending，reason=legacy_before_attribution（不猜历史归属）
---   两种情况都写入 attribution_migrations，数量、规则、时间可审计，可回滚
+-- 依据 device_bindings 的绑定窗口（device_id + greenhouse_id + start_at/end_at）。
+--
+-- 【时间基准】用 coalesce(sampled_at, "timestamp")，即"设备采样时刻"：
+--   · sampled_at 有值 → 用 sampled_at；
+--   · sampled_at 为空 → 退回 "timestamp"（入库时记录的原始采集时间）。
+--   绝不用 created_at 判窗口：补传、换棚、解绑后重连都会让"入库时刻"与
+--   "采集时刻"脱钩，用入库时间就等于把老数据冒认给当前棚室。
+--   生产核对（2026-10-22）：7053 行 NULL 里 sampled_at 全空、timestamp 全非空、
+--   二者与 created_at 偏差 ≤1s；仅 2 行 timestamp 为 2025-10-17（设备时钟未校准），
+--   这 2 行按 created_at 会被误归 resolved，按采集时刻正确落 pending。
+--
+-- 【分支】
+--   1a) 恰好 1 个窗口覆盖 → resolved + reason=backfill_binding_window + binding_id/version
+--   1b) 多个窗口重叠     → pending + reason=conflict_binding_window（报冲突，不随便取一条）
+--   1c) 无窗口 / 时间缺失 → pending + reason=legacy_before_attribution / legacy_time_missing
+--   每个分支都写 attribution_migrations（数量、规则、时间基准可审计，可回滚）
 CREATE TABLE IF NOT EXISTS attribution_migrations (
   id            VARCHAR(36) PRIMARY KEY,
   code          VARCHAR(60) NOT NULL,
@@ -27,16 +39,25 @@ CREATE TABLE IF NOT EXISTS attribution_migrations (
 CREATE INDEX IF NOT EXISTS ix_attribution_migrations_code
   ON attribution_migrations(code);
 
-WITH covered AS (
-  SELECT t.id AS telemetry_id, b.id AS binding_id, b.binding_version
+-- 1a) 唯一窗口覆盖
+WITH cand AS (
+  SELECT t.id AS telemetry_id,
+         b.id AS binding_id,
+         b.binding_version,
+         (t.sampled_at IS NOT NULL) AS by_sampled_at,
+         count(*) OVER (PARTITION BY t.id) AS win_cnt
     FROM telemetry t
     JOIN device_bindings b
       ON b.device_id     = t.device_id
      AND b.greenhouse_id = t.greenhouse_id
-     AND b.start_at     <= t.created_at
-     AND (b.end_at IS NULL OR b.end_at >= t.created_at)
+     AND b.start_at     <= coalesce(t.sampled_at, t."timestamp")
+     AND (b.end_at IS NULL OR b.end_at >= coalesce(t.sampled_at, t."timestamp"))
    WHERE t.attribution_status IS NULL
-     AND t.company_id IS NOT NULL          -- 公司为空视为证据不足，留给人工确认
+     AND t.company_id IS NOT NULL
+), covered AS (
+  SELECT telemetry_id, binding_id, binding_version, by_sampled_at
+    FROM cand
+   WHERE win_cnt = 1
 ), upd AS (
   UPDATE telemetry t
      SET attribution_status = 'resolved',
@@ -45,23 +66,58 @@ WITH covered AS (
          binding_version    = c.binding_version
     FROM covered c
    WHERE t.id = c.telemetry_id
+  RETURNING c.by_sampled_at
+)
+INSERT INTO attribution_migrations (id, code, rule, rows_affected, detail)
+SELECT gen_random_uuid()::text, '004_backfill_null', 'binding_window_sample_time', count(*),
+       json_build_object('status', 'resolved', 'source', 'device_bindings',
+                         'time_basis', 'coalesce(sampled_at,timestamp)',
+                         'by_sampled_at', count(*) FILTER (WHERE by_sampled_at),
+                         'by_timestamp',  count(*) FILTER (WHERE NOT by_sampled_at))
+  FROM upd;
+
+-- 1b) 多窗口重叠：必须报冲突，不能任取一条
+WITH conflict AS (
+  SELECT t.id AS telemetry_id
+    FROM telemetry t
+    JOIN device_bindings b
+      ON b.device_id     = t.device_id
+     AND b.greenhouse_id = t.greenhouse_id
+     AND b.start_at     <= coalesce(t.sampled_at, t."timestamp")
+     AND (b.end_at IS NULL OR b.end_at >= coalesce(t.sampled_at, t."timestamp"))
+   WHERE t.attribution_status IS NULL
+     AND t.company_id IS NOT NULL
+   GROUP BY t.id
+  HAVING count(*) > 1
+), upd AS (
+  UPDATE telemetry
+     SET attribution_status = 'pending',
+         attribution_reason = 'conflict_binding_window'
+   WHERE id IN (SELECT telemetry_id FROM conflict)
   RETURNING 1
 )
 INSERT INTO attribution_migrations (id, code, rule, rows_affected, detail)
-SELECT gen_random_uuid()::text, '004_backfill_null', 'binding_window', count(*),
-       json_build_object('status', 'resolved', 'source', 'device_bindings')
+SELECT gen_random_uuid()::text, '004_backfill_null', 'conflict_binding_window', count(*),
+       json_build_object('status', 'pending', 'source', 'device_bindings',
+                         'reason', '多个绑定窗口重叠，需人工确认')
   FROM upd;
 
+-- 1c) 无窗口覆盖 或 时间证据缺失：保持待确认，不猜历史归属
 WITH upd AS (
   UPDATE telemetry
      SET attribution_status = 'pending',
-         attribution_reason = 'legacy_before_attribution'
+         attribution_reason = CASE
+           WHEN coalesce(sampled_at, "timestamp") IS NULL THEN 'legacy_time_missing'
+           ELSE 'legacy_before_attribution'
+         END
    WHERE attribution_status IS NULL
-  RETURNING 1
+  RETURNING attribution_reason
 )
 INSERT INTO attribution_migrations (id, code, rule, rows_affected, detail)
-SELECT gen_random_uuid()::text, '004_backfill_null', 'no_binding_window', count(*),
-       json_build_object('status', 'pending', 'source', 'none')
+SELECT gen_random_uuid()::text, '004_backfill_null', 'leave_pending', count(*),
+       json_build_object('status', 'pending', 'source', 'none',
+                         'time_missing', count(*) FILTER (WHERE attribution_reason = 'legacy_time_missing'),
+                         'no_window',    count(*) FILTER (WHERE attribution_reason = 'legacy_before_attribution'))
   FROM upd;
 
 -- 自检：仅检查本次回填写入的行（reason=backfill_binding_window），
