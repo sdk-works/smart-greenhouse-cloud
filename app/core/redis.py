@@ -27,6 +27,18 @@ async def close_redis():
 
 UNKNOWN_COMPANY = "unknown"
 
+# 实时推送的 Redis 频道一律带公司后缀：`telemetry_updates:<company_id>`。
+# 为什么必须带：WS 侧原来是"订阅一个全局频道、广播给所有连接"，而 WS 连接
+# 在 2026-10-22 之前还完全不校验身份 —— 任何打开页面的人都能收到全平台遥测，
+# A 公司浏览器也能收到 B 公司的数据。缓存键加了前缀不等于消息通道也隔离了。
+REALTIME_CHANNEL_BASES = ("telemetry_updates", "config_ack_updates")
+
+
+def realtime_channel(base: str, company_id: Optional[str]) -> str:
+    """构造按公司隔离的频道名。company_id 缺失落到 unknown 后缀，
+    监听侧会直接丢弃这类消息（宁可不推，也不能推错人）。"""
+    return f"{base}:{company_id or UNKNOWN_COMPANY}"
+
 
 class CacheService:
     """缓存服务。
@@ -73,4 +85,12 @@ class CacheService:
         return await self.get(f"device:status:{device_id}")
 
     async def publish(self, channel: str, message: dict):
-        await self.redis.publish(channel, json.dumps(message, default=str))
+        """发布实时消息到本实例公司作用域的频道。
+
+        注意：**不要**再发到裸频道名（`telemetry_updates`），那样所有公司的 WS
+        都会收到。所有调用点都必须用一个带正确 company_id 的 CacheService。
+        """
+        await self.redis.publish(
+            realtime_channel(channel, self.company_id),
+            json.dumps(message, default=str),
+        )
