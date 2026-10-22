@@ -7,6 +7,8 @@ api/__init__.py — 路由统一注册
     鉴权在 app/api/ws.py 端点内部完成（先 accept 再 close 4401/4403），
     不在路由级依赖里做——依赖报错发生在握手前，浏览器只会看到 1006。
   - 细粒度 RBAC 由各路由内 check_permission 负责；这里保证"必须已登录"。
+  - 例外：`/emqx/authn` 是给 broker 调的钩子（T3 候选，未启用），拿不到业务 token，
+    改用共享密钥 EMQX_AUTHN_TOKEN；未配置时端点直接 503。
 """
 from fastapi import APIRouter, Depends
 
@@ -16,6 +18,7 @@ from app.api import (
     deployments, auth, point_configs, inspection_batches,
     workbench, photo_catalog, incidents, freshness, bindings, maintenance,
     actuator_commands, ai_advice, planting_batches, reports,
+    device_onboarding, emqx_authn,
 )
 from app.api.auth import get_current_user
 
@@ -47,11 +50,16 @@ _ROUTERS = [
     (ai_advice.router,          "",                   "AI 受控接口与指标定义",            True),
     (planting_batches.router,   "",                   "PlantingBatches 种植批次",         True),
     (reports.router,            "",                   "Reports 报表导出",                 True),
+    (device_onboarding.router,  "",                   "DeviceOnboarding 设备入网与凭据",   True),
 ]
 
 for _r, _prefix, _tag, _secure in _ROUTERS:
     _deps = [Depends(get_current_user)] if _secure else []
     api_router.include_router(_r, prefix=_prefix, tags=[_tag], dependencies=_deps)
+
+# EMQX 认证钩子：单独挂载，**不强制业务登录**（broker 拿不到业务 token），
+# 端点内部用共享密钥鉴权，未配置即 503。生产当前未启用，见 docs/emqx-authn-enable.md。
+api_router.include_router(emqx_authn.router, tags=["EMQX authn hook（候选，未启用）"])
 
 # WebSocket 单独挂载（鉴权方式与 HTTP 不同）
 # 【2026-10-22 浏览器实测修正】不再挂 ws_current_user 依赖。

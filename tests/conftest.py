@@ -123,7 +123,7 @@ async def schema_ready():
         await db.commit()
         # 迁移文件是测试库 schema 的唯一来源，测试跑前必须已应用
         for mig in ("003_robot_loop_up.sql", "004_data_reliability_up.sql",
-                    "005_business_up.sql"):
+                    "005_business_up.sql", "006_device_onboarding_up.sql"):
             if os.path.exists(os.path.join(ROOT, "migrations", mig)):
                 await _apply_migration(db, mig)
     return True

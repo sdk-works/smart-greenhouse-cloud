@@ -724,3 +724,33 @@ class RawMessage(Base):
     parser_version = Column(String(20))
     error          = Column(Text)
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MqttCredential(Base):
+    """MQTT 设备凭据（设备入网闭环的核心表）。
+
+    表 `mqtt_credentials` 在生产已存在（2026-10-22 手工建），006 迁移补齐入网所需字段。
+    对应关系：
+        username  ← EMQX 认证用户名（设备侧 MQTT user）
+        clientid  ← 设备侧唯一允许使用的 Client ID（DTU 模块序列号）
+        device_id ← 关联 `devices.device_id`（字符串形态的身份，如 JY001）
+        asset_no  ← DTU 资产编号（贴在设备壳上的那个号）
+        compat_identity ← 兼容身份：老的上行报文里用的 device_id，便于并轨期识别
+    username 与 clientid 都唯一 ⇒ 二者天然一对一绑定。
+    """
+    __tablename__ = "mqtt_credentials"
+    username        = Column(String(100), primary_key=True)
+    password_hash   = Column(Text, nullable=False)
+    clientid        = Column(String(100), nullable=False, unique=True)
+    device_id       = Column(String(100), nullable=False, unique=True, index=True)
+    enabled         = Column(Boolean, nullable=False, default=True, index=True)
+    note            = Column(Text)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    asset_no        = Column(String(64))
+    compat_identity = Column(String(100))
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+    disabled_at     = Column(DateTime(timezone=True))
+    last_rotated_at = Column(DateTime(timezone=True))
+    rotation_count  = Column(Integer, nullable=False, default=0)
+    created_by      = Column(String(36))
+    updated_by      = Column(String(36))

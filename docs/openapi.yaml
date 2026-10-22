@@ -5116,6 +5116,236 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/credential:
+    get:
+      tags:
+      - DeviceOnboarding 设备入网与凭据
+      - DeviceOnboarding 设备入网
+      summary: Get Credential
+      operationId: get_credential_api_v1_devices__device_id__credential_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - DeviceOnboarding 设备入网与凭据
+      - DeviceOnboarding 设备入网
+      summary: Create Credential
+      operationId: create_credential_api_v1_devices__device_id__credential_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialCreateIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/credential/rotate:
+    post:
+      tags:
+      - DeviceOnboarding 设备入网与凭据
+      - DeviceOnboarding 设备入网
+      summary: Rotate Credential
+      operationId: rotate_credential_api_v1_devices__device_id__credential_rotate_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/credential/enabled:
+    patch:
+      tags:
+      - DeviceOnboarding 设备入网与凭据
+      - DeviceOnboarding 设备入网
+      summary: Set Credential Enabled
+      operationId: set_credential_enabled_api_v1_devices__device_id__credential_enabled_patch
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/credential/install-sheet:
+    get:
+      tags:
+      - DeviceOnboarding 设备入网与凭据
+      - DeviceOnboarding 设备入网
+      summary: Install Sheet
+      description: '安装人员可用的配置清单。
+
+
+        fmt=text 返回可直接打印/导出的纯文本；fmt=json 返回结构化，便于页面渲染。
+
+        **清单里不含口令**——口令只在创建/换密那一次给过；要对现网设备重新下发口令，
+
+        必须走 /credential/rotate 重新生成（并重新打印清单）。'
+      operationId: install_sheet_api_v1_devices__device_id__credential_install_sheet_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: fmt
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(json|text)$
+          default: json
+          title: Fmt
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emqx/authn:
+    post:
+      tags:
+      - EMQX authn hook（候选，未启用）
+      - EMQX authn hook（候选，未启用）
+      summary: Emqx Authn
+      operationId: emqx_authn_api_v1_emqx_authn_post
+      parameters:
+      - name: X-Authn-Token
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Authn-Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthnRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       summary: Health
@@ -5234,6 +5464,26 @@ components:
       - greenhouse_id
       - point_name
       title: AssignmentIn
+    AuthnRequest:
+      properties:
+        username:
+          type: string
+          title: Username
+          default: ''
+        password:
+          type: string
+          title: Password
+          default: ''
+        clientid:
+          type: string
+          title: Clientid
+          default: ''
+        peerhost:
+          type: string
+          title: Peerhost
+          default: ''
+      type: object
+      title: AuthnRequest
     BindingIn:
       properties:
         greenhouse_id:
@@ -5374,6 +5624,36 @@ components:
       required:
       - status
       title: CommandResultIn
+    CredentialCreateIn:
+      properties:
+        asset_no:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Asset No
+          description: DTU 资产编号（设备壳上的号）
+        clientid:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Clientid
+          description: 设备模块序列号，作为唯一允许的 Client ID
+        username:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Username
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - asset_no
+      - clientid
+      title: CredentialCreateIn
     DeploymentCreate:
       properties:
         name:
@@ -5671,6 +5951,20 @@ components:
           - type: 'null'
       type: object
       title: DeviceUpdate
+    EnabledIn:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - enabled
+      title: EnabledIn
     GreenhouseCreate:
       properties:
         name:

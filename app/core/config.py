@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # MQTT (EMQX)
     MQTT_BROKER_HOST: str = "localhost"
     MQTT_BROKER_PORT: int = 1883
+    # EMQX HTTP 认证钩子的共享密钥（T3 候选）。
+    # 空串 = 钩子不可用(authn 端点直接 503)，避免裸奔；启用时才配到 .env 里。
+    EMQX_AUTHN_TOKEN: str = ""
     MQTT_USERNAME: str = "admin"
     MQTT_PASSWORD: str = "SET_LOCALLY_DO_NOT_COMMIT"
     MQTT_CLIENT_ID: str = "greenhouse-server"

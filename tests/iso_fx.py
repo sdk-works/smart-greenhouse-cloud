@@ -16,7 +16,7 @@ from app.models.models import (
     ActuatorCommand, AiAdviceLog, Alert, AuditLog, Company, Device, DeviceBinding, DeviceStatus, DeviceType,
     Greenhouse, Image, Incident, IncidentEvent, InspectionBatch,
     InspectionEvidence, InspectionPoint, InspectionVisit, MapVersion,
-    RobotMapAlert, RobotMapRegistry, RobotPointConfig, RobotPointMapping,
+    MqttCredential, RobotMapAlert, RobotMapRegistry, RobotPointConfig, RobotPointMapping,
     CommandStatus, PlantingBatch, RobotTask, TaskStatus, TaskType,
     Telemetry, User,
 )
@@ -233,6 +233,19 @@ async def _cleanup(fx: IsoFixture):
                     InspectionVisit.batch_id.in_(fx.batches)))).scalars().all():
                 await db.delete(r)
             await db.commit()
+
+        # mqtt_credentials 不挂在 greenhouse 下，只能按 device_id 清。
+        # 不清的话下一轮测试登记新凭据会撞 "一个设备一套凭据" 的唯一约束。
+        if fx.devices:
+            dev_rows = (await db.execute(
+                select(Device).where(Device.id.in_(fx.devices)))).scalars().all()
+            dev_ids = [d.device_id for d in dev_rows]
+            if dev_ids:
+                for row in (await db.execute(
+                        select(MqttCredential).where(
+                            MqttCredential.device_id.in_(dev_ids)))).scalars().all():
+                    await db.delete(row)
+                await db.commit()
 
         for model, attr in _WIPE_ORDER:
             ids = list(getattr(fx, attr)) if attr else []
