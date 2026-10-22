@@ -128,6 +128,9 @@ def _publish_sync(host, port, topic, payload_obj, ack_topic, username=None,
         if rc[0] is not None and rc[0] != 0:
             break
         if rc[0] == 0 and not published:
+            # 等订阅登记完再发，否则服务端回的 ACK 没人接（会误判成"没回 ACK"）
+            if ack_topic:
+                _time.sleep(0.3)
             body = payload_obj.encode() if raw else _json.dumps(payload_obj).encode()
             c.publish(topic, body, qos=0)
             published = True
