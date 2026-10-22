@@ -18,7 +18,7 @@ from app.api import (
     deployments, auth, point_configs, inspection_batches,
     workbench, photo_catalog, incidents, freshness, bindings, maintenance,
     actuator_commands, ai_advice, planting_batches, reports,
-    device_onboarding, emqx_authn,
+    device_onboarding, emqx_authn, greenhouse_status,
 )
 from app.api.auth import get_current_user
 
@@ -30,6 +30,7 @@ _ROUTERS = [
     (auth.router,               "/auth",               "Auth 认证&权限", False),
     (dashboard.router,          "/dashboard",          "Dashboard",                      True),
     (greenhouses.router,        "/greenhouses",        "Greenhouses",                    True),
+    (greenhouse_status.router,  "",                   "GreenhouseStatus 大棚设备与数据状态", True),
     (devices.router,            "/devices",            "Devices",                        True),
     (telemetry.router,          "/telemetry",          "Telemetry",                      True),
     (tasks.router,              "/tasks",              "Tasks",                          True),

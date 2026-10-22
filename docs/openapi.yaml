@@ -609,6 +609,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/greenhouses/{greenhouse_id}/status:
+    get:
+      tags:
+      - GreenhouseStatus 大棚设备与数据状态
+      - GreenhouseStatus 大棚设备与数据状态
+      summary: Greenhouse Status
+      operationId: greenhouse_status_api_v1_greenhouses__greenhouse_id__status_get
+      parameters:
+      - name: greenhouse_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Greenhouse Id
+      - name: max_age_seconds
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 86400
+          minimum: 1
+          default: 900
+          title: Max Age Seconds
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/devices/:
     get:
       tags:

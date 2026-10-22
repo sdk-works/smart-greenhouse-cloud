@@ -95,6 +95,11 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
+# T4：大棚设备与数据状态页（纯静态，走 ../greenhouses/{id}/status 接口取数）
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(_STATIC_DIR):
+    app.mount("/pages", StaticFiles(directory=_STATIC_DIR), name="pages")
+
 app.include_router(api_router, prefix=settings.API_PREFIX)
 
 

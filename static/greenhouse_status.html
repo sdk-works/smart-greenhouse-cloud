@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大棚设备与数据状态（T4）</title>
+<style>
+  :root{
+    --ok:#1a7f37; --warn:#b8860b; --err:#b42318; --info:#2563eb;
+    --bg:#f6f8fa; --card:#fff; --line:#d8dee4; --muted:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:var(--bg);
+       font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:#1f2328}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:16px;margin:20px 0 8px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  input,button,select{padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:14px}
+  button{cursor:pointer}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;background:#fff}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:#f0f3f6;font-weight:600;white-space:nowrap}
+  .tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;border:1px solid;white-space:nowrap}
+  .t-ok{color:var(--ok);border-color:var(--ok)}
+  .t-warn{color:var(--warn);border-color:var(--warn)}
+  .t-err{color:var(--err);border-color:var(--err)}
+  .t-info{color:var(--info);border-color:var(--info)}
+  .t-mute{color:var(--muted);border-color:var(--muted)}
+  .muted{color:var(--muted)}
+  .expired-value{color:var(--muted);font-style:italic}
+  ul{margin:6px 0 0 18px;padding:0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .kv{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .kv .k{color:var(--muted);font-size:12px}
+  .kv .v{font-size:18px;font-weight:600}
+  code{background:#eef1f4;padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>大棚设备与数据状态</h1>
+<div class="muted" id="subtitle">加载中…</div>
+
+<div class="bar">
+  <label>棚 ID <input id="gh" size="36" placeholder="greenhouse_id"></label>
+  <label>接口基址 <input id="api" size="28" value="http://127.0.0.1:8011/api/v1"></label>
+  <label>Token <input id="token" size="42" placeholder="Bearer 令牌（登录后前台可取）"></label>
+  <label>过期阈值(秒) <input id="maxage" size="6" value="900"></label>
+  <button id="load">加载</button>
+  <span id="err" class="tag t-err" style="display:none"></span>
+</div>
+
+<div id="wrap" style="display:none">
+  <h2>概览</h2>
+  <div class="grid" id="summary"></div>
+
+  <h2>异常提示</h2>
+  <div class="card"><ul id="anomalies"></ul></div>
+
+  <h2>设备：连接状态 与 数据状态（两回事）</h2>
+  <div class="card">
+    <table id="devices">
+      <thead><tr>
+        <th>设备编号</th><th>名称</th><th>MQTT 已连接</th><th>连接的判定来源</th>
+        <th>最近有效数据</th><th>数据年龄</th><th>数据是否新鲜</th>
+        <th>补传条数</th><th>数据归属</th><th>凭据</th>
+      </tr></thead><tbody></tbody>
+    </table>
+    <div class="muted" style="margin-top:6px">
+      「MQTT 已连接」只说明链路在，不代表数据在来；是否有效数据请看右侧三列。
+    </div>
+  </div>
+
+  <h2>当前指标</h2>
+  <div class="card">
+    <table id="metrics">
+      <thead><tr>
+        <th>指标</th><th>当前值</th><th>单位</th><th>数值状态</th>
+        <th>最后更新时间</th><th>数据归属</th><th>设备自检</th><th>历史（含补传）</th>
+      </tr></thead><tbody></tbody>
+    </table>
+    <div class="muted" style="margin-top:6px">
+      过期的数据只留原值备查，不再作为实时值显示（灰斜线 + 「数据已过期」）。
+      补传数据见「历史」列，不参与当前值。
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const API_DEFAULT = location.search.includes("api=")
+  ? new URLSearchParams(location.search).get("api") : null;
+
+function tag(cls, text){ return `<span class="tag ${cls}">${text}</span>` }
+
+const STATE_VIEW = {
+  ok:            ["t-ok",   "正常"],
+  expired:       ["t-warn", "数据已过期"],
+  missing:       ["t-mute", "本次未上报"],
+  out_of_range:  ["t-err",  "超出合理区间"],
+};
+const ATTR_VIEW = {
+  trusted:  ["t-ok",   "可信"],
+  inferred: ["t-warn", "推定"],
+  pending:  ["t-info", "待定"],
+  unknown:  ["t-mute", "未判定"],
+};
+const LVL_VIEW = { error:["t-err","错误"], warning:["t-warn","警告"], info:["t-info","提示"] };
+
+function fmtTime(s){
+  if(!s) return "—";
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleString("zh-CN");
+}
+
+function fmtValue(m){
+  if(m.state === "expired"){
+    return `<span class="expired-value">${m.value ?? "—"}（数据已过期）</span>`;
+  }
+  if(m.state === "missing") return `<span class="muted">—（本次未上报）</span>`;
+  const n = m.value;
+  const digits = (m.precision === 0 || m.precision === null) ? 0 : (m.precision ?? 1);
+  const v = (typeof n === "number") ? n.toFixed(digits) : String(n);
+  return `<b>${v}</b>`;
+}
+
+function render(d){
+  $("wrap").style.display = "";
+  $("subtitle").textContent =
+    `棚：${d.greenhouse.name || d.greenhouse.id}　过期阈值 ${d.max_age_seconds}s　快照 ${fmtTime(d.as_of)}`;
+
+  const s = d.summary, a = s.attribution || {};
+  $("summary").innerHTML = [
+    ["设备总数", s.devices_total, ""],
+    ["MQTT 在线", s.devices_mqtt_online, s.devices_mqtt_online < s.devices_total ? "t-warn" : "t-ok"],
+    ["数据有效设备", s.devices_data_fresh, s.devices_data_fresh < s.devices_total ? "t-warn" : "t-ok"],
+    ["指标正常", `${s.metrics_ok}/${s.metrics_total}`, s.metrics_ok < s.metrics_total ? "t-warn" : "t-ok"],
+    ["已过期指标", s.metrics_expired, s.metrics_expired ? "t-warn" : ""],
+    ["越界指标", s.metrics_out_of_range, s.metrics_out_of_range ? "t-err" : ""],
+    ["归属 可信", a.trusted ?? 0, "t-ok"],
+    ["归属 推定", a.inferred ?? 0, "t-warn"],
+    ["归属 待定", a.pending ?? 0, "t-info"],
+    ["归属 未判定", a.unknown ?? 0, "t-mute"],
+    ["异常条数", `${s.anomalies_total}（含 ${s.errors} 条错误）`, s.errors ? "t-err" : ""],
+  ].map(([k, v, cls]) =>
+    `<div class="kv"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`).join("");
+
+  $("anomalies").innerHTML = d.anomalies.length
+    ? d.anomalies.map(x => {
+        const [cls, word] = LVL_VIEW[x.level] || LVL_VIEW.info;
+        return `<li>${tag(cls, word)} <b>${x.code}</b>：${x.message}</li>`;
+      }).join("")
+    : '<li class="muted">没有检测到异常</li>';
+
+  $("devices").tBodies[0].innerHTML = d.devices.map(x => {
+    const fr = x.data.freshness || {};
+    const freshTxt = !x.data.has_data
+      ? tag("t-mute", "无数据")
+      : (x.data.within_max_age ? tag("t-ok", "新鲜") : tag("t-warn", String(fr.state || "expired")));
+    const attr = ATTR_VIEW[(x.attribution || {}).grade] || ATTR_VIEW.unknown;
+    const cred = !x.credential || !x.credential.registered
+      ? tag("t-mute", "未登记")
+      : (x.credential.enabled ? tag("t-ok", "已登记/启用") : tag("t-err", "已停用"));
+    return `<tr>
+      <td><code>${x.device_id}</code></td><td>${x.name || "—"}</td>
+      <td>${x.mqtt.connected ? tag("t-ok", "在线") : tag("t-err", "离线")}</td>
+      <td class="muted">${x.mqtt.source}<br>最后上线 ${fmtTime(x.mqtt.last_seen)}</td>
+      <td>${fmtTime(x.data.last_valid_at)}<br><span class="muted">基准 ${x.data.basis || "—"}</span></td>
+      <td>${x.data.age_seconds ?? "—"}</td>
+      <td>${freshTxt}</td>
+      <td>${x.backfilled_rows ?? 0}</td>
+      <td>${tag(attr[0], attr[1])}<br><span class="muted">${(x.attribution||{}).detail||""}</span></td>
+      <td>${cred}</td>
+    </tr>`;
+  }).join("");
+
+  $("metrics").tBodies[0].innerHTML = d.metrics.map(m => {
+    const st = STATE_VIEW[m.state] || STATE_VIEW.ok;
+    const attr = ATTR_VIEW[(m.attribution || {}).grade] || ATTR_VIEW.unknown;
+    const hist = (m.history || []).map(h =>
+      `<li>${fmtTime(h.basis_at)} <code>${h.msg_id}</code>${h.is_backfill ? tag("t-info","补传") : ""}</li>`).join("");
+    return `<tr>
+      <td><b>${m.name}</b><br><span class="muted">${m.code} · ${m.device_id}</span></td>
+      <td>${fmtValue(m)}</td>
+      <td>${m.unit || ""}</td>
+      <td>${tag(st[0], st[1])}<br><span class="muted">${m.message || ""}</span></td>
+      <td>${fmtTime(m.last_updated_at)}<br><span class="muted">距今 ${m.age_seconds ?? "—"} 秒</span></td>
+      <td>${tag(attr[0], attr[1])}</td>
+      <td>${m.device_reports_channel_invalid ? tag("t-warn", "有通道自检未通过") : tag("t-ok", "全部通过")}</td>
+      <td><ul>${hist || '<li class="muted">无</li>'}</ul></td>
+    </tr>`;
+  }).join("") || '<tr><td colspan="8" class="muted">本棚没有可用指标数据</td></tr>';
+}
+
+async function load(){
+  const err = $("err"); err.style.display = "none";
+  const gh = $("gh").value.trim();
+  if(!gh){ err.textContent = "请先填棚 ID"; err.style.display = ""; return; }
+  try{
+    const base = API_DEFAULT || $("api").value.replace(/\/$/, "");
+    const tok  = $("token").value.trim();
+    const url  = `${base}/greenhouses/${encodeURIComponent(gh)}/status?max_age_seconds=${$("maxage").value}`;
+    const res  = await fetch(url, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+    if(res.status === 404){ $("wrap").style.display = "none";
+      err.textContent = "404：这个棚不存在，或不属于你所在公司（接口按公司隔离）";
+      err.style.display = ""; return; }
+    if(res.status === 401 || res.status === 403){
+      $("wrap").style.display = "none";
+      err.textContent = res.status + "：未登录或无权限"; err.style.display = ""; return; }
+    if(!res.ok){ throw new Error("HTTP " + res.status); }
+    render(await res.json());
+  }catch(e){
+    $("wrap").style.display = "none";
+    err.textContent = "加载失败：" + e.message; err.style.display = "";
+  }
+}
+
+$("load").addEventListener("click", load);
+const q = new URLSearchParams(location.search);
+if(q.get("gh")){ $("gh").value = q.get("gh"); }
+if(q.get("api")){ $("api").value = q.get("api"); }
+if(q.get("token")){ $("token").value = q.get("token"); }
+if(q.get("gh")){ load(); }
+</script>
+</body>
+</html>
