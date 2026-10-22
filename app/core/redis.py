@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 import redis.asyncio as aioredis
 from app.core.config import settings
 
@@ -23,9 +24,21 @@ async def close_redis():
         _redis_client = None
 
 
+# ===== 实时推送：只给“消息频道”加公司作用域，缓存键行为保持不变 =====
+UNKNOWN_COMPANY = "unknown"
+REALTIME_CHANNEL_BASES = ("telemetry_updates", "config_ack_updates")
+
+
+def realtime_channel(base: str, company_id: Optional[str]) -> str:
+    """构造按公司隔离的频道名。company_id 缺失落 unknown，监听侧会丢弃。"""
+    return f"{base}:{company_id or UNKNOWN_COMPANY}"
+
+
 class CacheService:
-    def __init__(self, redis: aioredis.Redis):
+    def __init__(self, redis: aioredis.Redis, company_id: Optional[str] = None):
         self.redis = redis
+        # 仅用于 publish 的频道作用域；不参与 set/get 的键构造
+        self.company_id = company_id
 
     async def set(self, key: str, value, expire: int = 3600):
         await self.redis.set(key, json.dumps(value, default=str), ex=expire)
@@ -51,4 +64,8 @@ class CacheService:
         return await self.get(f"device:status:{device_id}")
 
     async def publish(self, channel: str, message: dict):
-        await self.redis.publish(channel, json.dumps(message, default=str))
+        """发到本实例公司作用域的频道；不再发裸频道（会串公司）。"""
+        await self.redis.publish(
+            realtime_channel(channel, self.company_id),
+            json.dumps(message, default=str),
+        )

@@ -704,6 +704,20 @@ class MQTTService:
         logger.info(f"[MQTT-V9] 💓 心跳 robot={robot_id} batt={payload.get('battery')}%")
         return True
 
+    async def _company_of(self, device_id: str):
+        """topic 里的 device_id → 公司。WS 推送必须知道公司，否则只能落到 unknown
+        频道，而监听侧会丢弃 unknown —— 宁可这条实时消息推不出去，也不能推给错的公司。"""
+        try:
+            async with AsyncSessionLocal() as db:
+                row = (await db.execute(text(
+                    "SELECT g.company_id FROM devices d "
+                    "JOIN greenhouses g ON g.id = d.greenhouse_id "
+                    "WHERE d.device_id = :d LIMIT 1"), {"d": device_id})).first()
+            return row[0] if row else None
+        except Exception as e:
+            logger.error(f"[MQTT-V9] 查询设备公司失败 device={device_id}: {e}")
+            return None
+
     async def _handle_state(self, robot_id: str, payload: dict):
         pm = self._validate_point_mapping(payload)
         state = payload.get("state", "")
@@ -711,7 +725,7 @@ class MQTTService:
                     + (f" @ {pm['chassis_point']}→{pm['greenhouse_point']}" if pm else ""))
         try:
             redis = await get_redis()
-            cache = CacheService(redis)
+            cache = CacheService(redis, company_id=await self._company_of(robot_id))
             await cache.publish("telemetry_updates", {
                 "type": "state", "device_id": robot_id,
                 "state": state, "task_id": payload.get("task_id"),
@@ -728,7 +742,7 @@ class MQTTService:
             await db.commit()
         try:
             redis = await get_redis()
-            cache = CacheService(redis)
+            cache = CacheService(redis, company_id=await self._company_of(robot_id))
             await cache.publish("config_ack_updates", {
                 "device_id": robot_id, "config_version": cv,
                 "mapping_sync_status": pm_ok,
