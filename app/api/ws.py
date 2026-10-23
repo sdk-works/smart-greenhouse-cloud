@@ -18,6 +18,7 @@ ws.py - WebSocket 实时推送服务
 """
 import asyncio
 import logging
+import os
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 import redis.asyncio as aioredis
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 # 与 HTTP 侧保持一致：token 在 Redis 里是滑动过期，WS 连上也算一次活跃
 TOKEN_TTL_SECONDS = 8 * 60 * 60
+
+# 已建立连接的权限复查间隔（独立定时任务，不依赖客户端消息）
+WS_AUTH_RECHECK_SECONDS = int(os.environ.get("WS_AUTH_RECHECK_SECONDS", "30"))
 
 
 class ConnectionManager:
@@ -107,6 +111,22 @@ async def _resolve_user(token: str):
     return user
 
 
+async def _session_still_valid(token: str, user_id, company_id) -> bool:
+    """复查：token 未过期/未吊销、用户仍启用、公司归属未变。任一不满足即失效。"""
+    redis = await get_redis()
+    cur = await redis.get(f"auth:token:{token}")
+    if not cur or str(cur) != str(user_id):
+        return False
+    await redis.expire(f"auth:token:{token}", TOKEN_TTL_SECONDS)
+    async with AsyncSessionLocal() as db:
+        u = await db.get(User, user_id)
+        if not u or not u.is_active:
+            return False
+        if str(getattr(u, "company_id", None)) != str(company_id):
+            return False
+    return True
+
+
 async def redis_listener():
     """监听所有公司的实时频道，按频道后缀分流到对应公司的连接。
 
@@ -174,15 +194,42 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
         logger.warning(f"[WS] 账号无公司归属，拒绝 user={getattr(user, 'username', '?')}")
         return
 
+    user_id = user.id
     await manager.connect(websocket, company_id)
+
+    async def _recheck():
+        """独立定时复查：空闲连接也会被检查，不看客户端是否发消息。"""
+        while True:
+            await asyncio.sleep(WS_AUTH_RECHECK_SECONDS)
+            try:
+                ok = await _session_still_valid(token, user_id, company_id)
+            except Exception as e:
+                # 查询失败也不能无限沿用旧权限：按失效处理（fail-closed）
+                logger.error(f"[WS] 权限复查失败，按失效断开 user={user_id}: {e}")
+                ok = False
+            if not ok:
+                logger.info(f"[WS] 会话已失效，断开 user={user_id} company={company_id}")
+                try:
+                    await websocket.close(code=4401)
+                except Exception:
+                    pass
+                return
+
+    recheck_task = asyncio.create_task(_recheck())
     try:
         while True:
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
-            # 其他消息静默忽略（不卡住）
+            # 其他消息静默忽略；权限复查由独立任务保证
     except WebSocketDisconnect:
-        await manager.disconnect(websocket)
+        pass
     except Exception as e:
         logger.debug(f"[WS] WebSocket 异常断开: {e}")
+    finally:
+        recheck_task.cancel()
+        try:
+            await recheck_task
+        except (asyncio.CancelledError, Exception):
+            pass
         await manager.disconnect(websocket)

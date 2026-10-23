@@ -28,6 +28,18 @@ from app.models.models import (
 
 logger = logging.getLogger(__name__)
 
+# 无公司归属的实时消息：不广播、不静默，累计计数 + 可追踪日志
+_pub_dropped_no_company = 0
+
+
+def _note_companyless(channel: str, ctx: str):
+    global _pub_dropped_no_company
+    _pub_dropped_no_company += 1
+    logger.warning(
+        f"[WS-PUB] 丢弃无公司归属消息 channel={channel} ctx={ctx} "
+        f"total={_pub_dropped_no_company}"
+    )
+
 
 def _parse_ts(ts) -> datetime:
     if not ts: return datetime.now(timezone.utc)
@@ -580,7 +592,8 @@ class MQTTService:
                 logger.warning(f"[RAW] 原始报文记录失败: {e}")
 
         await self._publish_device_ack(device_id, msg_id, "stored")
-        await self._push_realtime(device_id, greenhouse_id, received_at, data, {}, None)
+        await self._push_realtime(device_id, greenhouse_id, received_at, data, {}, None,
+                                  company_id=company_id)
         logger.info(f"[DEV-ACK] ✅ 遥测入库并回 stored device={device_id} msg={msg_id}")
         return True
 
@@ -693,12 +706,16 @@ class MQTTService:
         try:
             redis = await get_redis()
             await redis.set(f"device:online:{robot_id}", "1", ex=120)
-            cache = CacheService(redis)
-            await cache.publish("telemetry_updates", {
-                "type": "heartbeat", "device_id": robot_id,
-                "battery": payload.get("battery"),
-                "status":  payload.get("status"),
-            })
+            company_id = await self._company_of(robot_id)
+            if not company_id:
+                _note_companyless("telemetry_updates", "heartbeat")
+            else:
+                cache = CacheService(redis, company_id=company_id)
+                await cache.publish("telemetry_updates", {
+                    "type": "heartbeat", "device_id": robot_id,
+                    "battery": payload.get("battery"),
+                    "status":  payload.get("status"),
+                })
         except Exception as e:
             logger.error(f"[MQTT-V9] 心跳Redis: {e}")
         logger.info(f"[MQTT-V9] 💓 心跳 robot={robot_id} batt={payload.get('battery')}%")
@@ -775,21 +792,27 @@ class MQTTService:
         logger.info(f"[MQTT-V9] 📷 图片通知 robot={robot_id} url={payload.get('image_url')}"
                     + (f" @ {pm['chassis_point']}" if pm else ""))
 
-    async def _push_realtime(self, device_id, greenhouse_id, ts, data, robot_status, pm):
+    async def _push_realtime(self, device_id, greenhouse_id, ts, data, robot_status, pm,
+                             company_id=None):
         data = _normalize_realtime_data(data)
+        if company_id is None:
+            company_id = await self._company_of(device_id)
         try:
             redis = await get_redis()
-            cache = CacheService(redis)
+            cache = CacheService(redis, company_id=company_id)
             await cache.set_device_online(device_id, True)
             await cache.set_device_status(device_id, {
                 "online": True, "last_seen": datetime.now(timezone.utc).isoformat(),
                 "data": data, "robot_status": robot_status, "point_mapping": pm,
             })
-            await cache.publish("telemetry_updates", {
-                "device_id": device_id, "greenhouse_id": greenhouse_id,
-                "timestamp": ts.isoformat(), "data": data,
-                "robot_status": robot_status, "point_mapping": pm,
-            })
+            if not company_id:
+                _note_companyless("telemetry_updates", "realtime")
+            else:
+                await cache.publish("telemetry_updates", {
+                    "device_id": device_id, "greenhouse_id": greenhouse_id,
+                    "timestamp": ts.isoformat(), "data": data,
+                    "robot_status": robot_status, "point_mapping": pm,
+                })
         except Exception as e:
             logger.error(f"[MQTT-V9] Redis推送失败: {e}")
 
