@@ -3,6 +3,9 @@
 只测分类模块本身与聚合落库；**不改** `app/mqtt/mqtt_service.py` 的现有解析行为
 （接线是独立的、需要人批准的 3 行 diff，见 docs/parse-error-classification-20261023.md）。
 """
+import os
+
+import psycopg2
 import pytest
 from sqlalchemy import text
 
@@ -13,6 +16,27 @@ from app.core.parse_error_classifier import (
 )
 
 TOPIC = "agri/device/JY001/up"
+
+MIGRATION = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "migrations", "007_parse_error_kind_up.sql")
+
+
+def sync_dsn() -> str:
+    from app.core.config import settings
+    return settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_007():
+    """parse_error_stats 是迁移建的表（模型里没有），测试前幂等补一次。"""
+    conn = psycopg2.connect(sync_dsn())
+    try:
+        with conn.cursor() as cur:
+            with open(MIGRATION, encoding="utf-8") as f:
+                cur.execute(f.read())
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def test_non_json():
