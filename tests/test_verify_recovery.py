@@ -195,3 +195,45 @@ def test_split_picks_the_most_recent_gap():
     i = vr.split_at_last_gap(a + b + c, 60)
     assert i == len(a + b) - 1
     assert (a + b + c)[i + 1][1] == "JY001/33/1"
+
+
+# ─────────────────── 断电窗口内"不该有数据"（2026-10-25 夜间补）───────────────────
+# 起因：docstring 承诺"窗口里冒出遥测必须逐条列出来"，但代码那一节只算了空白口径，
+#       检查**从来没实现** —— 演练场景 C（窗口内塞 3 条）跑出来是"全部通过"。
+#       这类"文档说有、代码没有"比没有检查更危险：它会让人以为已经验过。
+
+def _pre_with_inwindow(n=3, window_start=None):
+    """断电前的正常数据 + n 条落在窗口内的疑似数据。"""
+    base = pre_rows()                                  # boot 31 ... 922
+    ws = window_start or (base[-1][0] + timedelta(minutes=2))
+    inwin = [(ws + timedelta(seconds=60 * (i + 1)), f"JY001/31/{930 + i}")
+             for i in range(n)]
+    return base + inwin
+
+
+def test_in_window_rows_are_flagged_not_swallowed():
+    ws = T0 - timedelta(hours=20)
+    res = vr.analyze(_pre_with_inwindow(3, ws), rows(32, range(1, 6)), 60,
+                     window_start=ws)
+    c = check(res, "断电窗口内无数据")
+    assert c["ok"] is False
+    assert "3 条" in c["detail"]
+    assert res["window_check"]["rows_in_window"] == 3
+    # 逐条样例也必须在摘要里出现，方便人工定位
+
+
+def test_clean_window_passes():
+    ws = T0 - timedelta(hours=20)
+    res = vr.analyze(pre_rows(), rows(32, range(1, 6)), 60, window_start=ws)
+    assert check(res, "断电窗口内无数据")["ok"] is True
+    assert res["window_check"]["rows_in_window"] == 0
+
+
+def test_without_window_start_it_says_unknown_not_pass():
+    """没给起点就是不判定 —— 不许默认通过，也不许假装没问题。"""
+    res = vr.analyze(_pre_with_inwindow(3), rows(32, range(1, 6)), 60)
+    wc = res["window_check"]
+    assert wc["verified"] is False
+    assert wc["start"] is None
+    with pytest.raises(AssertionError):
+        check(res, "断电窗口内无数据")

@@ -95,7 +95,8 @@ def split_at_last_gap(rows, period_s=60.0, mult=2.0):
     return None
 
 
-def analyze(pre, post, period_s=60.0, tolerance=0.25, now=None, currently_silent=None):
+def analyze(pre, post, period_s=60.0, tolerance=0.25, now=None, currently_silent=None,
+            window_start=None):
     """pre/post 都是 [(created_at, msg_id)]，按时间升序。
 
     `currently_silent=True` 表示"序列末尾之后设备就没再传了"。
@@ -103,6 +104,10 @@ def analyze(pre, post, period_s=60.0, tolerance=0.25, now=None, currently_silent
     只看最后一个长间隔会找到上一次重启，把 29 小时前的旧恢复判成"已恢复"。
 
     返回验收结果字典。**不改库、不推算、不补数**。
+
+    `window_start`（断电窗口起点）只影响第 5 项检查：窗口内若冒出数据，说明是缓存补传
+    或有人补数，必须**逐条列出来**，不能默默忽略。判它需要知道窗口起点，
+    而这通常是人工估计值 —— **没有起点就明确说"无法判定"，不猜、也不默认通过**。
     """
     out = {
         "state": STATE_NOT_YET,
@@ -208,6 +213,30 @@ def analyze(pre, post, period_s=60.0, tolerance=0.25, now=None, currently_silent
         out["cadence"] = None
 
     # 5. 断电窗口内不该有任何数据（有就是补传/伪造）
+    #
+    # 注意：序列里的**最后一个长间隔**才是本次断点，所以"窗口内冒出来的数据"会被算进
+    # pre 里，光看 pre/post 看不出来。必须拿**外部给定的窗口起点**去比。
+    if window_start is not None:
+        ws = window_start if getattr(window_start, "tzinfo", None) \
+            else window_start.replace(tzinfo=timezone.utc)
+        inwin = [(at, m) for at, m in pre if at > ws]
+        if inwin:
+            sample = "、".join(m for _, m in inwin[:5])
+            add("断电窗口内无数据", False,
+                f"窗口起点 {ws.isoformat()} 之后仍有 {len(inwin)} 条（补传/补数/伪造），"
+                f"例如：{sample}" + ("…" if len(inwin) > 5 else ""),
+                "warning")
+        else:
+            add("断电窗口内无数据", True,
+                f"{ws.isoformat()} 之后到恢复首条之间没有其他数据")
+        out["window_check"] = {"verified": True, "start": ws.isoformat(),
+                               "rows_in_window": len(inwin)}
+    else:
+        # 证据不足：不猜、不默认通过，显式标 pending
+        out["window_check"] = {"verified": False, "start": None,
+                               "reason": "未提供断电窗口起点"
+                                         "（--outage-start 或 --maintenance-file）"}
+
     if currently_silent:
         out["accounting"] = _accounting(None, None, period_s,
                                         ongoing_from=post[-1][0], now=now)
@@ -339,7 +368,7 @@ def main():
         pre, post = rows_all[max(0, idx - 199):idx + 1], rows_all[idx + 1:]
 
     res = analyze(pre, post, a.period, a.tolerance, now=now,
-                  currently_silent=currently_silent)
+                  currently_silent=currently_silent, window_start=start)
     res["silent_now_s"] = round(silent_s, 1)
     res["device"] = a.device
     res["rows_scanned"] = len(rows_all)
@@ -374,6 +403,10 @@ def main():
     for c in res["checks"]:
         mark = "✓" if c["ok"] else ("!" if c["level"] == "warning" else "✗")
         print(f"  [{mark}] {c['name']}：{c['detail']}")
+    wc = res.get("window_check") or {}
+    if not wc.get("verified"):
+        print(f"  [?] 断电窗口内有无疑似数据：无法判定 —— {wc.get('reason', '')}")
+        print("      给 --outage-start 或维护窗口后才会判定；这不是通过，是 pending。")
     acc = res["accounting"]
     print()
     print(f"空白口径：{acc['note']}")
