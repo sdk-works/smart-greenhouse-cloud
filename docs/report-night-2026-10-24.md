@@ -38,7 +38,7 @@
 
 | 任务 | 本夜动作 | 状态 |
 |---|---|---|
-| T1 断流证据链 | 用今日实时数据刷新；**首次**实际运行 `outage_watch.py` / `verify_recovery.py` 于生产只读口径 | **真实环境验证通过**（只读生产核对） |
+| T1 断流证据链 | 用今日实时数据刷新；**首次**实际运行 `outage_watch.py` / `verify_recovery.py` 于生产只读口径；**新增**真库三场景恢复演练并抓到一个检查缺失 | **真实环境验证通过**（只读生产核对） |
 | T2 WS 候选 `ac133fa` | 复跑协议级 5 项 + 部署演练；**修掉一个导致复跑误报的缺陷** | **模拟联调通过**（浏览器仍未验证） |
 | T3 004 归属回填 | 生产只读预演复核（分级数字未变）；专项 6 条测试 | **自动测试通过** + 生产只读核对 |
 | T4 悬挂 job 清理 | 复跑 6 条测试；生产仍无 job 表 | **代码完成 / 自动测试通过**（数据不在本机） |
@@ -47,7 +47,7 @@
 | T7 运维工具 | `dbq.sh` 动词版复核；断流三态与恢复验收脚本首次实跑 | **自动测试通过** |
 | T8 上线清单 | 已交付，本夜补一步：今日分支合入 `master` 的冲突预检 | **代码完成** |
 | T9 前端接入 | 仍缺可构建工程 | **未完成（阻塞）** |
-| I 集成 | 全量 pytest **238 passed**（连跑两次一致） | **自动测试通过** |
+| I 集成 | 全量 pytest **241 passed**（同一份代码连跑 3 次一致） | **自动测试通过** |
 
 ---
 
@@ -159,7 +159,46 @@ $ /opt/greenhouse/venv/bin/python scripts/verify_recovery.py --db-url "$DATABASE
 新 boot、seq 归 1、连续无跳号、节律中位 60.0s —— 说明这套判据在真实数据上是可用的，
 不是只在造的数据上通过。
 
-### 3.4 EMQX（只读）
+### 3.4 恢复验收在真库上的三个场景演练（本夜新增，并抓到一个缺陷）
+
+`verify_recovery.py` 昨天只用**内存数据**测过、对生产只跑出"未恢复"这一支 ——
+它的 SQL（`JOIN devices ON d.id = t.device_id`）**从没跑过"恢复后"这一支**。
+要是这条 SQL 有错，会在设备上电那一刻才暴露，而那时最需要可信结论。
+所以本夜加了 `scripts/recovery_drill.sql`（测试库三场景，幂等）：
+
+| 场景 | 构造 | 结果 |
+|---|---|---|
+| A 正常恢复 | boot 31→32，seq 从 1，60s 节律，窗口内无数据 | **全部通过**；节律中位 60.0s，2.7h 空白 → 应达 0、丢包 0、不计入完整率 |
+| B 同 boot 续传 | boot 仍 31，seq 从 923 续 | `[✗] 新 boot_id`、`[✗] seq 重新开始` —— 正是人该看到的样子 |
+| C 窗口内冒数据 | 恢复正常，但断电窗口里插了 3 条 | **修之前：判"全部通过"；修之后：报出这 3 条的 msg_id** |
+
+场景 C 暴露的**缺陷**（`19d9950`）：脚本 docstring 承诺"断电窗口里冒出遥测必须逐条列出来，
+不能默默忽略"，但 `analyze()` 那一节**只算了空白口径，检查从来没实现**。
+这种"文档说有、代码没有"比没有检查更危险 —— 会让人以为验过了。
+
+修正口径（两条都很重要）：
+
+- 有 `--outage-start`（或维护窗口）时才判定；窗口内出现数据 → 告警并列出样例 `msg_id`；
+- **没有起点就明确输出 pending**（打印"无法判定"），**不猜、也不默认通过**。
+
+修正后对生产的只读复核（这条也顺带可用了）：
+
+```
+$ verify_recovery.py --db-url "$DATABASE_SYNC_URL" --device JY001 \
+    --outage-start '2026-10-23T08:54:18+08:00' --period 60
+  [✓] 新 boot_id：boot 30 → 31
+  [✓] seq 重新开始：恢复首条 seq=1（正常重启）
+  [✓] 恢复后 seq 连续：922 条无跳号、无重复
+  [✓] 上传节律：样本 921 段，中位 60.0s（期望 60.0s），落在 45~75s 的占 99.8%
+  [✓] 断电窗口内无数据：2026-10-23T08:54:18+08:00 之后到恢复首条之间没有其他数据
+  [✗] 当前在线：最新一条停在 2026-10-23T08:54:18.978728+08:00，至今静默 141481s（阈值 120s）
+空白口径：…空白时长 141481.1s（39.3h）（断流仍在进行）→ 应达 0 条，丢包 0 条，计入完整率=False
+```
+
+新增测试 **3 条**（窗口内有数据必须被报出来 / 干净窗口必须通过 / 没给起点必须标未判定），
+全量 **241 passed**（238 + 3），连跑一致。
+
+### 3.5 EMQX（只读）
 
 ```
 $ sudo emqx ctl clients list | grep 02501026081300004386
@@ -172,7 +211,7 @@ Client(02501026081300004386, username=dev-jy-dtu-000001, peername=36.113.69.129:
 `keepalive=0` 使 MQTT 层永不判定超时 ⇒ `connected=true` 依然不是存活证据（详见
 `docs/outage-triage-20261023.md` §3）。
 
-### 3.5 服务端日志（只读 `journalctl -u greenhouse`）
+### 3.6 服务端日志（只读 `journalctl -u greenhouse`）
 
 ```
 Oct 23 08:54:18 ... [DEV-ACK] ✅ 遥测入库并回 stored device=JY001 msg=JY001/31/922
@@ -292,9 +331,15 @@ $ /opt/greenhouse/venv/bin/python scripts/check_mqtt_credentials_schema.py --db-
 
 ```
 $ /opt/greenhouse-nightly/run_tests.sh
-238 passed in 57.46s
+238 passed in 57.46s        # 本夜第一段（继承昨夜 203 + 白天 35）
 $ /opt/greenhouse-nightly/run_tests.sh     # 第二次，查稳定性/状态泄漏
 238 passed in 57.32s
+$ /opt/greenhouse-nightly/run_tests.sh     # 第三段：补完恢复验收缺陷（+3 条测试）之后
+241 passed in 57.33s
+$ /opt/greenhouse-nightly/run_tests.sh     # 再跑一次确认稳定
+241 passed in 57.83s
+$ /opt/greenhouse-nightly/run_tests.sh     # 清理演练数据后再跑
+241 passed in 57.20s
 $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_credentials_schema.py \
       tests/test_verify_recovery.py tests/test_outage_watch.py tests/test_stuck_job_sweeper.py \
       tests/test_parse_error_classifier.py -v
@@ -305,7 +350,7 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 |---|---|
 | 2026-10-22 夜间 | 166 passed |
 | 2026-10-23 夜间 | 203 passed |
-| **本夜（含白天 3 个提交）** | **238 passed**，**失败 0、跳过 0，连跑两次一致** |
+| **本夜最终（含白天 3 个提交 + 本夜修复）** | **241 passed**，**失败 0、跳过 0**；同一份代码连跑 3 次一致（241/241/241） |
 
 环境：测试库 `greenhouse_nightly_test` + redis 6379/15 + `MQTT_BROKER_PORT=1` + `NIGHTLY_READONLY=1`。
 **没有删过任何测试、没有放宽过任何既有断言。**
@@ -317,6 +362,8 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 | 分支 | commit | 内容 |
 |---|---|---|
 | `night/night-20261024`（本夜） | `9fe9385` | 验收可复跑化：`scripts/ws_runtime_start.sh`（+seed）、`scripts/night_verify_all.sh`、`scripts/t1_refresh_20261024.sql`、`docs/recovery-acceptance-20261024.md` |
+| | `27c5914` / `d3e9ae3` | 夜间报告 2026-10-24 本体与后续补充 |
+| | `19d9950` | **修 `verify_recovery.py` 缺失的"断电窗口内有数据"检查** + `scripts/recovery_drill.sql` 三场景演练 + 3 条测试（191→241） |
 | `night/night-20261023`（昨夜继承，未改动） | `8d923f2` / `64f8ee8` / `7aadc9a`（白天） | 恢复验收 / 断流三态 / T1 结案 |
 | 昨夜 T1~T9+I | `48b67a6` `aecb744` `5454325` `60fb454` `b2c7447` `1cf2f09` `a9a2f01` `472470f` `9ade9c1` `14d37c0` | 见昨夜报告 |
 
@@ -328,12 +375,16 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 /opt/greenhouse-nightly/ws_runtime_start.sh       # 起停 + seed（新增 seed）
 /opt/greenhouse-nightly/night_verify_all.sh       # 一条龙验收（新增）
 /opt/greenhouse-nightly/t1_refresh_20261024.sql   # 不写死日期的取证 SQL（新增）
+/opt/greenhouse-nightly/recovery_drill.sql       # 测试库恢复演练三场景（新增，自带清理）
 /opt/greenhouse-nightly/logs/night-verify-2026-10-24.log        # 全套原始输出
 /opt/greenhouse-nightly/logs/night-verify-2026-10-25.log        # 修复 SQL/路径后重跑，**干净无报错**
 /opt/greenhouse-nightly/logs/ws-runtime-check-20261024-night.txt
 /opt/greenhouse-nightly/logs/deploy-rehearsal-20261024-night.txt
 /opt/greenhouse-nightly/logs/verify-recovery-20261024-night.txt
+/opt/greenhouse-nightly/logs/verify-recovery-20261025-final.txt # 修复后对生产的只读复核
 /opt/greenhouse-nightly/logs/outage-watch-20261024-night.txt
+/opt/greenhouse-nightly/logs/recovery-drill-20261025.txt        # 三场景演练（修复前）
+/opt/greenhouse-nightly/logs/recovery-drill-20261025-after-fix.txt # 修复后 A/C 两场景
 /opt/greenhouse-nightly/logs/backfill-attribution-20261024-night.txt
 /opt/greenhouse-nightly/logs/check-mqtt-credentials-20261024-night.txt
 ```
@@ -344,12 +395,18 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 
 ### 9.1 失败项
 
-**全量 0 失败。** 本夜出现的失败全部是**验收脚本自身的环境依赖缺陷**（§2），已修并复跑通过；
-没有任何一处是"改断言让它变绿"。
+**全量 0 失败。** 本夜出现的失败全部来自**验收工具自身**的缺陷，都已修好并复跑通过；
+没有任何一处是"改断言让它变绿"：
+
+| 现象 | 根因 | 处置 |
+|---|---|---|
+| WS 验收前 3 项误报 FAIL（实为 4401 假象） | redis 6399 里的三条 `auth:token:*` 从未固化 | 新增 `ws_runtime_start.sh seed`，重跑 5/5 |
+| 演练场景 C"全部通过" | `verify_recovery.py` 的"断电窗口内无数据"检查**没实现**（只有注释） | `19d9950` 补实现 + 3 条测试 |
+| 一键脚本报 SQL 文件不存在 + `max(msg_id)` 取到 `JY001/99/2` | 文件名日期格式不一致 / 用字典序取"末条" | 修正后脚本、SQL，重跑干净 |
 
 ### 9.2 跳过项
 
-无 skip（238 条全跑）。
+无 skip（241 条全跑）。
 
 ### 9.3 未覆盖风险（如实）
 
@@ -404,7 +461,7 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 ### Q2 WS 能不能上线？依据？浏览器验证补了吗？
 
 **可以上线（协议级）**，依据三条：① `ac133fa` 运行时 5/5 且服务端日志同点佐证；
-② 全量 238 passed，未放宽断言；③ 部署演练证明 `merge --no-ff → /health 200 → reset --hard a01bb33` 可用可回滚，
+② 全量 241 passed（未放宽任何断言）；③ 部署演练证明 `merge --no-ff → /health 200 → reset --hard a01bb33` 可用可回滚，
 且今天把**当前整条夜间分支**也做了合入预检（109 文件，无冲突）。
 **浏览器验证没补** —— 本机无 chromium / playwright，2 核 3GB 装不了；这是明确未验证项。
 另有一个本夜新发现的前提：**昨夜的 5/5 当时不可复跑**（漏了 redis token 播种），已修，今天结果**重新成立**。
