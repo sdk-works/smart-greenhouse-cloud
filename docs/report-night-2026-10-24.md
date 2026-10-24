@@ -7,6 +7,16 @@
 > ① 把昨夜的验收结论**逐项复跑核实**（不是复读）；② 修掉复跑中暴露的**不可复跑缺陷**；
 > ③ 用今天的实时数据刷新证据链与五问答案。
 > 报告文件名用 2026-10-24，**没有覆盖昨夜那份**（那是唯一的原始记录，不能抹）。
+>
+> ⚠ **一处需要你确认的范围问题**：本机 `/opt/greenhouse-nightly/night-20261024/` 下放着
+> `NIGHT1-TASK.md`（署名「夜间任务书 · 第一晚 2026-10-24 23:30 — 10-25 07:30」）与 `NIGHT2-TASK.md`，
+> 覆盖的是**另一摊**：`fw-jyenvmon` 纯逻辑控制状态机、`cloud-smartgh` 云端控制闭环、
+> AI 图片附件、APK 拍照等，并附有一批快照 `snapshots/*.tar.gz`
+> （cloud-smartgh、fw-jyenvmon、ai-frontend、encoder-briter、ai-backend-partial，SHA256 已校验）。
+> 本轮收到的**明文范围是"只做温室云端这一摊"**，因此本夜**没有执行那份任务书**。
+> 若那份才是今晚的正主，请明确告知，下一晚可以从
+> `night-20261024/snapshots/`（SHA256 已校验）直接开工。
+
 
 ---
 
@@ -319,6 +329,7 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 /opt/greenhouse-nightly/night_verify_all.sh       # 一条龙验收（新增）
 /opt/greenhouse-nightly/t1_refresh_20261024.sql   # 不写死日期的取证 SQL（新增）
 /opt/greenhouse-nightly/logs/night-verify-2026-10-24.log        # 全套原始输出
+/opt/greenhouse-nightly/logs/night-verify-2026-10-25.log        # 修复 SQL/路径后重跑，**干净无报错**
 /opt/greenhouse-nightly/logs/ws-runtime-check-20261024-night.txt
 /opt/greenhouse-nightly/logs/deploy-rehearsal-20261024-night.txt
 /opt/greenhouse-nightly/logs/verify-recovery-20261024-night.txt
@@ -442,6 +453,9 @@ $ ./run_tests.sh tests/test_backfill_attribution.py tests/test_check_mqtt_creden
 ```bash
 # ① 一条命令复跑本夜全部验收（生产只读 + 测试库跑测试，约 5 分钟）
 /opt/greenhouse-nightly/night_verify_all.sh
+# 输出到 logs/night-verify-<日期>.log。**不要 `| head`**，管道一断脚本会被 SIGPIPE 打断
+# （本夜踩到一次，好在没留下残留进程：实例起之前就断了；`ss -lntp` 复核 8011/6399 均为空）
+
 
 # ② 设备重新上电后，按清单验收（boot / seq / 节律 / 空白口径）
 #    见 docs/recovery-acceptance-20261024.md；验收完记得把维护窗口 end 改成实际恢复时刻
