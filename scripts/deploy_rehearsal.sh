@@ -46,8 +46,16 @@ for i in $(seq 1 30); do
   sleep 1
 done
 echo "/health = $code"
-echo "--- WS 路由是否在（openapi）---"
-curl -s -m 5 "http://127.0.0.1:$PORT/openapi.json" | grep -o '"/api/v1/ws/realtime"' | head -1
+echo "--- WS 路由运行时校验（真实握手）---"
+# 修于 2026-10-25 夜间：原来这一步是
+#   curl openapi.json | grep -o '"/api/v1/ws/realtime"'
+# 而 **FastAPI 的 OpenAPI 里不含 WebSocket 路由**（docs/openapi.yaml 里也搜不到 /ws/），
+# 所以这条 grep 永远匹配不到、永远输出空行，脚本又不因它失败 —— 一个从不生效的检查。
+# 换成真实握手：不带 token 连 /api/v1/ws/realtime，期望服务端 accept 后 close(4401)。
+# 该分支在 token 为空时直接返回 None，**不查 redis**，因此不依赖 6399 是否起过。
+WSBASE=ws://127.0.0.1:$PORT /opt/greenhouse/venv/bin/python /opt/greenhouse-nightly/ws_route_probe.py "$PORT"
+RC_WS=$?
+echo "WS 路由握手退出码=$RC_WS（0=已挂载并按 4401 拒绝未认证连接）"
 echo "--- 实例日志 ---"
 tail -5 /opt/greenhouse-nightly/logs/rehearsal-uvicorn.log
 
