@@ -29,6 +29,20 @@
         而 EMQX 因为 keepalive=0 一直显示 connected
         （见 docs/outage-triage-20261023.md §3）。
 
+## 「最后一条」必须取全表，不能只看回看窗口（2026-10-25 夜间修的缺陷）
+
+原实现只看 `--lookback-hours`（默认 48h）窗口内的样本：窗口内一条都没有时
+`find_outages` 返回空 ⇒ `summarize` 没有 ongoing 事件 ⇒ 顶层状态退回 `ok`。
+**于是设备离线越久、状态看起来越"正常"** —— 断的方向完全反了。
+2026-10-25 23:35 实测就是这个样子：JY001 末条遥测 2026-10-23 08:54（静默 62h，
+已超出 48h 窗口），脚本却打印「当前状态：正常运行」，只是靠下面那行维护窗口
+注解才让人看出不对。
+
+修法：另外查一次**该设备的全表末条**作为锚点 `anchor`：
+  * 窗口内有样本 → `anchor` 就是窗口内末条（行为与原来完全一致）；
+  * 窗口内 0 条、但全表有末条 → 用它判"进行中的断流"，静默起点如实取该时刻；
+  * 全表一条都没有 → `anchor=None`，**不编造** `last_seen` / 断流时长，仍是 `ok`。
+
 ## 维护窗口（计划停机）怎么登记
 
 窗口文件是 JSON，可手改，也可用 CLI：
@@ -78,6 +92,15 @@ SELECT t.created_at
    AND t.created_at >= now() - interval '%(hours)s hours'
  ORDER BY t.created_at
 """.replace("%(dev)s", "%%(dev)s")   # 保留 psycopg2 的命名参数，只让 hours 走 % 格式化
+
+# 全表末条：回看窗口内一条都没有时，用它当"进行中静默"的起点。
+# 没有它，设备离线超过回看窗口后会退化成"正常运行"（见文件头说明）。
+SQL_LAST = """
+SELECT max(t.created_at)
+  FROM telemetry t
+  JOIN devices d ON d.id = t.device_id
+ WHERE (d.device_id = %(dev)s OR d.id = %(dev)s)
+"""
 
 
 # ────────────────────────────── 时间与窗口 ──────────────────────────────
@@ -190,13 +213,16 @@ def classify(events, windows, device, now):
     return out
 
 
-def summarize(device, times, events, windows, period_s, now):
+def summarize(device, times, events, windows, period_s, now, anchor=None):
     """顶层状态 + 页面要的两个布尔量。
 
     **计划停机时 `device_offline` / `data_stale` 仍然是 True** ——
     用户明确要求：计划停机也要显示"设备离线、数据已过期"，只是不告警。
+
+    `anchor` = 该设备全表末条（回看窗口内可能一条都没有）。
+    窗口内没样本时用它判"离线/过期"；全表都没有则仍是 `None`，不编造。
     """
-    last = times[-1] if times else None
+    last = times[-1] if times else anchor
     silent = round((now - last).total_seconds(), 1) if last else None
     thr = 2 * period_s
     stale = True if last is None else silent > thr
@@ -232,15 +258,18 @@ def summarize(device, times, events, windows, period_s, now):
 
 
 # ────────────────────────────── 断流检测（原逻辑不变）──────────────────────
-def find_outages(times, period_s: float, n: int, now=None):
+def find_outages(times, period_s: float, n: int, now=None, anchor=None):
     """纯函数：给一串升序的入库时刻，返回断流事件列表。
 
     返回每项：{
         kind: 'ended' | 'ongoing',
         started_at, ended_at(ended 才有), gap_count, max_gap_s, threshold_s
     }
+
+    `anchor`：回看窗口内 0 条样本时的"最后一次遥测时刻"（全表末条）。
+    给空 `times` 配上它才能判出进行中的断流；不给则什么都不判（不编造）。
     """
-    if not times:
+    if not times and anchor is None:
         return []
     thr = 2 * period_s
     out = []
@@ -268,7 +297,7 @@ def find_outages(times, period_s: float, n: int, now=None):
             flush()
     flush()
 
-    last = times[-1]
+    last = times[-1] if times else anchor
     if now is not None and (now - last).total_seconds() > thr:
         out.append({
             "kind": "ongoing",
@@ -384,25 +413,33 @@ def main():
         with conn.cursor() as cur:
             cur.execute(SQL % {"hours": int(a.lookback_hours)}, {"dev": a.device})
             times = [r[0] for r in cur.fetchall()]
+            # 回看窗口内 0 条时，取全表末条当锚点（见文件头「最后一条必须取全表」）
+            cur.execute(SQL_LAST, {"dev": a.device})
+            row = cur.fetchone()
+            anchor = row[0] if row else None
     finally:
         conn.close()
 
     now = datetime.now(timezone.utc)
     windows = load_windows(a.maintenance_file)
-    raw = find_outages(times, a.period, a.n, now=now)
+    raw = find_outages(times, a.period, a.n, now=now, anchor=anchor)
     events = classify(raw, windows, a.device, now)
-    summary = summarize(a.device, times, events, windows, a.period, now)
+    summary = summarize(a.device, times, events, windows, a.period, now,
+                        anchor=anchor)
     added = 0 if a.no_write else append_events(a.events_file, events, a.device)
 
     if a.json:
         doc = dict(summary)
-        doc.update({"rows": len(times), "events": events, "added": added})
+        doc.update({"rows": len(times), "rows_in_window": len(times),
+                    "anchor": anchor.isoformat() if anchor else None,
+                    "events": events, "added": added})
         print(json.dumps(doc, ensure_ascii=False))
         return 0
 
     print(f"设备={a.device}  窗口={a.lookback_hours}h  样本={len(times)} 条  "
           f"周期={a.period}s  阈值={2 * a.period}s  连续阈值={a.n} 条")
-    print(f"最后一条：{times[-1] if times else '（无数据）'}")
+    print(f"最后一条：{times[-1] if times else (anchor.isoformat() if anchor else '（无数据）')}"
+          f"{'  ← 来自全表末条（已超出回看窗口）' if not times and anchor else ''}")
     print(f"当前状态：{STATE_CN.get(summary['state'], summary['state'])}"
           f"   设备离线={summary['device_offline']}  数据过期={summary['data_stale']}"
           f"  需通知={summary['should_notify']}")

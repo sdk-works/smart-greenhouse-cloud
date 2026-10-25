@@ -85,6 +85,76 @@ def test_no_data_returns_no_event():
     assert outage_watch.find_outages([], 60, 3, now=T0) == []
 
 
+# ───────── 回看窗口内 0 条样本：必须靠全表末条(anchor)判，不能退化成"正常" ─────────
+# 缺陷背景（2026-10-25 夜间实测）：JY001 末条遥测 2026-10-23 08:54，静默 62h，
+# 超出默认 48h 回看窗口 ⇒ 窗口内 0 条 ⇒ 原实现无任何事件 ⇒ 顶层状态退回 ok，
+# 打印出「当前状态：正常运行」。断得越久越像正常，方向完全反了。
+def test_empty_window_with_anchor_detects_ongoing_silence():
+    anchor = T0 - timedelta(hours=62)          # 全表末条，远在回看窗口之外
+    evs = outage_watch.find_outages([], 60, 3, now=T0, anchor=anchor)
+    on = [e for e in evs if e["kind"] == "ongoing"]
+    assert len(on) == 1
+    assert on[0]["started_at"] == anchor.isoformat()
+    assert on[0]["silent_s"] == round(62 * 3600, 1)
+
+
+def test_empty_window_without_anchor_fabricates_nothing():
+    """全表一条都没有：不编造起点，也不编造时长。"""
+    assert outage_watch.find_outages([], 60, 3, now=T0, anchor=None) == []
+
+
+def test_empty_window_with_anchor_and_no_window_is_outage():
+    """窗口内 0 条 + 无计划停机 ⇒ 意外断流，且计入断流次数、需要通知。"""
+    anchor = T0 - timedelta(hours=62)
+    raw = outage_watch.find_outages([], 60, 3, now=T0, anchor=anchor)
+    c = outage_watch.classify(raw, [], "JY001", T0)
+    assert c[0]["state"] == "outage"
+    assert c[0]["counts_as_outage"] is True
+    assert c[0]["should_notify"] is True
+
+
+def test_empty_window_with_anchor_inside_maintenance_is_maintenance():
+    """JY001 当前真实场景：静默 62h，但仍在维护窗口内 ⇒ 计划停机，不通知。"""
+    anchor = T0 - timedelta(hours=62)
+    wins = [{"id": "mw-1", "device": "JY001", "operator": "用户",
+             "reason": "主动断电", "note": "",
+             "start": anchor - timedelta(minutes=1),
+             "end": T0 + timedelta(hours=19)}]
+    raw = outage_watch.find_outages([], 60, 3, now=T0, anchor=anchor)
+    c = outage_watch.classify(raw, wins, "JY001", T0)
+    assert c[0]["state"] == "maintenance"
+    assert c[0]["should_notify"] is False
+    s = outage_watch.summarize("JY001", [], c, wins, 60, T0, anchor=anchor)
+    assert s["state"] == "maintenance"          # ← 修之前这里是 ok
+    assert s["device_offline"] is True
+    assert s["data_stale"] is True
+
+
+def test_empty_window_after_maintenance_end_escalates_to_overrun():
+    """维护窗口已过期仍无数据 ⇒ 计划停机超期，必须通知（这就是 10-26 18:00 之后）。"""
+    anchor = T0 - timedelta(hours=62)
+    wins = [{"id": "mw-1", "device": "JY001", "operator": "用户",
+             "reason": "主动断电", "note": "",
+             "start": anchor - timedelta(minutes=1),
+             "end": T0 - timedelta(hours=1)}]   # 窗口 1 小时前就到期了
+    raw = outage_watch.find_outages([], 60, 3, now=T0, anchor=anchor)
+    c = outage_watch.classify(raw, wins, "JY001", T0)
+    assert c[0]["state"] == "maintenance_overrun"
+    assert c[0]["should_notify"] is True
+    assert c[0]["counts_as_outage"] is False    # 超期不是设备故障，不进断流次数
+    s = outage_watch.summarize("JY001", [], c, wins, 60, T0, anchor=anchor)
+    assert s["state"] == "maintenance_overrun"
+
+
+def test_summary_reports_silence_from_anchor_when_window_empty():
+    """窗口内 0 条时，last_seen / 静默时长仍要如实报出来（不写 None 糊过去）。"""
+    anchor = T0 - timedelta(hours=62)
+    s = outage_watch.summarize("JY001", [], [], [], 60, T0, anchor=anchor)
+    assert s["last_seen"] == anchor.isoformat()
+    assert s["silent_seconds"] == round(62 * 3600, 1)
+    assert s["device_offline"] is True
+
+
 # ─────────────────────── 三态分类 ───────────────────────
 def test_no_window_is_unexpected_outage():
     now = T0 + timedelta(seconds=3600)
