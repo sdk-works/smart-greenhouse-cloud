@@ -389,6 +389,9 @@ class MQTTService:
             handled = True
             if topic.startswith("agri/device/") and msg_type in {"command_ack", "device_status"}:
                 handled = await self._handle_actuator_message(robot_id, payload)
+            elif topic.startswith("agri/device/") and msg_type in {"command_result", "device_state", "device_info"}:
+                # 控制契约 v1 rev.2：归属校验（主题==payload==数据库）在 curtain_control 内做
+                handled = await self._handle_curtain_up(robot_id, payload, msg_type)
             elif msg_type == "telemetry":
                 if topic.startswith("agri/device/"):
                     handled = await self._handle_device_telemetry(robot_id, payload)
@@ -462,6 +465,11 @@ class MQTTService:
                         cmd.completed_at = datetime.now(timezone.utc)
             await db.commit()
         return True
+
+    async def _handle_curtain_up(self, hardware_id: str, payload: dict, msg_type: str):
+        """卷帘机控制契约 v1：command_result / device_state / device_info。"""
+        from app.services.curtain_control import handle_up_message
+        return await handle_up_message(hardware_id, msg_type, payload)
 
     def _validate_point_mapping(self, payload: dict) -> Optional[dict]:
         nav = _safe(payload.get("navigation"))

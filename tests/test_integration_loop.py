@@ -227,10 +227,17 @@ async def test_full_loop_simulation(client, iso):
                             headers=auth(token))).json()
     assert reg["expected"]["map_version"] == "map-v1", "不得自动改登记值"
 
-    # ── 15) 控制命令：ACK ≠ 执行结果（M4） ─────────────────
+    # ── 15) 控制命令：ACK ≠ 执行结果（M4，控制契约 v1 适配）──
+    # 契约要求：命令必须有可信 device_state；动作限契约 v1 集合
+    from app.models.models import ActuatorProfile as _AP
+    from datetime import datetime as _dt2, timezone as _tz2
+    db.add(_AP(device_id=dev.id, boot_id=17, session_id="b17-7f3a9c",
+               state_seq=12, last_command_seq=5, mode="remote",
+               motion="stopped", uptime_ms=123456,
+               state_received_at=_dt2.now(_tz2.utc)))
+    await db.commit()
     cmd = (await client.post(f"{API}/actuator-commands", json={
-        "device_id": dev.id, "action": "open_valve",
-        "params": {"duration": 30}}, headers=auth(token))).json()
+        "device_id": dev.id, "action": "move_up"}, headers=auth(token))).json()
     assert cmd["status"] == "pending"
     await client.post(f"{API}/actuator-commands/{cmd['id']}/send",
                       headers=auth(token))

@@ -33,6 +33,7 @@ PERMISSIONS = {
     "edit_point_mapping":   {UserRole.SUPER_ADMIN, UserRole.ADMIN},
     "view_point_mapping":   {UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.OPERATOR},
     "manage_robots":        {UserRole.SUPER_ADMIN, UserRole.ADMIN},
+    "control_device":       {UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.OPERATOR},  # 控制契约 v1 §11.3：VIEWER 只读
     "manage_greenhouses":   {UserRole.SUPER_ADMIN, UserRole.ADMIN},
     "manage_users":         {UserRole.SUPER_ADMIN, UserRole.ADMIN},
     "system_config":        {UserRole.SUPER_ADMIN},

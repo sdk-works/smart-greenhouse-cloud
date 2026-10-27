@@ -5,7 +5,7 @@ models.py — Smart Greenhouse Platform V9-Lite
 import uuid, enum
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, Float, Integer,
+    Column, String, Boolean, DateTime, Float, Integer, BigInteger,
     ForeignKey, Text, JSON, Enum as SAEnum, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -54,6 +54,7 @@ class CommandStatus(str, enum.Enum):
     PENDING = "pending"; SENT = "sent"; ACCEPTED = "accepted"
     EXECUTING = "executing"; EXECUTED = "executed"; REJECTED = "rejected"
     TIMEOUT = "timeout"; FAILED = "failed"; CANCELLED = "cancelled"
+    UNKNOWN = "unknown"  # 结果未知：发布后无设备回执（PUBLISH_UNKNOWN），非终态
 
 
 # ── 用户 & 权限 ───────────────────────────────────────────────
@@ -154,6 +155,21 @@ class ActuatorProfile(Base):
     emergency_stop  = Column(Boolean, default=False, nullable=False)
     maintenance_lock= Column(Boolean, default=False, nullable=False)
     last_command_id = Column(String(100), nullable=True)
+    # ── 控制契约 v1：device_state 摄取（2026-10-27）──
+    boot_id         = Column(Integer, nullable=True, index=True)
+    session_id      = Column(String(12), nullable=True)
+    state_seq       = Column(Integer, nullable=True)
+    last_command_seq= Column(Integer, nullable=True)
+    mode            = Column(String(16), nullable=True)
+    motion          = Column(String(16), nullable=True)
+    fault           = Column(String(24), nullable=True)
+    limit_up        = Column(Boolean, nullable=True)
+    limit_down      = Column(Boolean, nullable=True)
+    estop           = Column(Boolean, nullable=True)
+    position_raw    = Column(BigInteger, nullable=True)
+    position_valid  = Column(Boolean, nullable=True)
+    uptime_ms       = Column(BigInteger, nullable=True)
+    state_received_at = Column(DateTime(timezone=True))
     state_updated_at= Column(DateTime(timezone=True))
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
@@ -174,6 +190,11 @@ class ActuatorCommand(Base):
     publish_count  = Column(Integer, default=0, nullable=False)
     last_publish_at= Column(DateTime(timezone=True))
     result_boot_id = Column(String(36), nullable=True)
+    result_session_id = Column(String(64), nullable=True)
+    # ── 控制契约 v1 信封审计（2026-10-27）──
+    channel_id      = Column(String(16), nullable=True, default='curtain_1')
+    ttl_ms          = Column(Integer, nullable=True)
+    ref_uptime_ms   = Column(BigInteger, nullable=True)
     command_id     = Column(String(100), unique=True, nullable=False, index=True)
     device_id      = Column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
     greenhouse_id  = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)

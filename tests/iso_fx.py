@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.core.redis import get_redis
 from app.models.models import (
-    ActuatorCommand, AiAdviceLog, Alert, AuditLog, Company, Device, DeviceBinding, DeviceStatus, DeviceType,
+    ActuatorCommand, ActuatorProfile, AiAdviceLog, Alert, AuditLog, Company, Device, DeviceBinding, DeviceStatus, DeviceType,
     Greenhouse, Image, Incident, IncidentEvent, InspectionBatch,
     InspectionEvidence, InspectionPoint, InspectionVisit, MapVersion,
     MqttCredential, RobotMapAlert, RobotMapRegistry, RobotPointConfig, RobotPointMapping,
@@ -246,6 +246,15 @@ async def _cleanup(fx: IsoFixture):
                             MqttCredential.device_id.in_(dev_ids)))).scalars().all():
                     await db.delete(row)
                 await db.commit()
+
+        # 控制契约 v1（2026-10-27）：actuator_profiles 以 device_id 为主键，
+        # 必须先于设备删除清掉，否则依赖规则会试图置空主键而报错。
+        if fx.devices:
+            for pid in fx.devices:
+                p = await db.get(ActuatorProfile, pid)
+                if p is not None:
+                    await db.delete(p)
+            await db.commit()
 
         for model, attr in _WIPE_ORDER:
             ids = list(getattr(fx, attr)) if attr else []

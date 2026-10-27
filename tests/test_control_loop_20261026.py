@@ -23,6 +23,8 @@ import pytest
 from app.models.models import ActuatorCommand
 
 import app.api.actuator_commands as ac_mod
+from app.core.config import settings as _settings
+API_PREFIX = _settings.API_PREFIX
 from app.models.models import CommandStatus
 
 
@@ -63,6 +65,14 @@ async def _world(iso):
     admin1, t1 = await fx.user(db, UserRole.ADMIN, c1)
     admin2, t2 = await fx.user(db, UserRole.ADMIN, c2)
     viewer1, tv = await fx.user(db, UserRole.VIEWER, c1)
+    # 控制契约 v1：设备必须有可信 device_state 才能受控（2026-10-27 适配）
+    from app.models.models import ActuatorProfile
+    for _d in (dev1, dev2):
+        db.add(ActuatorProfile(device_id=_d.id, boot_id=17,
+                               session_id="b17-7f3a9c", state_seq=12,
+                               last_command_seq=5, mode="remote",
+                               motion="stopped", uptime_ms=123456,
+                               state_received_at=datetime.now(timezone.utc)))
     await db.commit()
     return {
         "db": db, "fx": fx,
@@ -76,47 +86,53 @@ async def _world(iso):
 
 async def create_cmd(client, token, device_id, **kw):
     body = {"device_id": device_id, "action": "move_up", **kw}
-    r = await client.post("/api/v2/actuator-commands", json=body,
+    r = await client.post(API_PREFIX + "/actuator-commands", json=body,
                           headers={"Authorization": f"Bearer {token}"})
     return r
 
 
 async def test_closed_loop_publish_once_then_result(client, db, iso, publisher):
     w = await _world(iso)
-    r = await create_cmd(client, w["token1"], w["dev1"].id,
-                         boot_id="boot-1", session_id="s-1", command_seq=7)
+    r = await create_cmd(client, w["token1"], w["dev1"].id)
     assert r.status_code == 201, r.text
     cmd = r.json()
     assert cmd["publish_count"] == 0, "入库阶段不得发布"
-    assert cmd["boot_id"] == "boot-1" and cmd["command_seq"] == 7
+    assert cmd["boot_id"] == "17" and cmd["command_seq"] == 6
 
-    r = await client.post(f"/api/v2/actuator-commands/{cmd['id']}/send?publish=true",
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/send?publish=true",
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 200, r.text
     assert r.json()["publish_count"] == 1
     assert publisher.count == 1, "必须只下发一次"
-    assert publisher.calls[0]["command"]["boot_id"] == "boot-1"
+    assert publisher.calls[0]["command"]["boot_id"] == 17
+    assert publisher.calls[0]["command"]["session_id"] == "b17-7f3a9c"
+    assert publisher.calls[0]["command"]["ref_uptime_ms"] == 123456
 
-    r = await client.post(f"/api/v2/actuator-commands/{cmd['id']}/ack",
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/ack",
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 200, r.text
     assert r.json()["is_acked"] is True and r.json()["is_executed"] is False
 
-    r = await client.post(f"/api/v2/actuator-commands/{cmd['id']}/result",
+    # 状态机：accepted → executing → executed（真实设备也按此顺序上报）
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/result",
+                          json={"status": "executing", "boot_id": "17"},
+                          headers={"Authorization": f"Bearer {w['token1']}"})
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/result",
                           json={"status": "executed", "actual_state": {"pos": 120},
-                                "boot_id": "boot-1"},
+                                "boot_id": "17"},
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 200, r.text
     out = r.json()
     assert out["status"] == "executed" and out["is_executed"] is True
 
     # 页面读取：列表与详情都能读到同一结论
-    lst = await client.get("/api/v2/actuator-commands",
+    lst = await client.get(API_PREFIX + "/actuator-commands",
                            headers={"Authorization": f"Bearer {w['token1']}"})
     assert lst.status_code == 200
     row = [x for x in lst.json()["items"] if x["id"] == cmd["id"]][0]
     assert row["status"] == "executed" and row["publish_count"] == 1
-    det = await client.get(f"/api/v2/actuator-commands/{cmd['id']}",
+    det = await client.get(f"{API_PREFIX}/actuator-commands/{cmd['id']}",
                            headers={"Authorization": f"Bearer {w['token1']}"})
     assert det.status_code == 200 and det.json()["actual_state"] == {"pos": 120}
 
@@ -124,14 +140,14 @@ async def test_closed_loop_publish_once_then_result(client, db, iso, publisher):
 async def test_cross_tenant_publish_count_is_zero(client, db, iso, publisher):
     w = await _world(iso)
     # A 公司的管理员去开 B 公司设备的命令：设备不可见（404），且不得发布
-    r = await create_cmd(client, w["token1"], w["dev2"].id, boot_id="boot-x")
+    r = await create_cmd(client, w["token1"], w["dev2"].id)
     assert r.status_code == 404, r.text
     assert publisher.count == 0, "跨租户必须一次都不发布"
 
     # 就算手工造出一条属于 B 的命令，A 也不能下发
     cmd = await w["fx"].command(w["db"], w["dev2"], w["gh2"], action="move_up", status="pending")
     await db.commit()
-    r = await client.post(f"/api/v2/actuator-commands/{cmd.id}/send?publish=true",
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd.id}/send?publish=true",
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code in (403, 404), r.text
     assert publisher.count == 0, "越权下发不得产生任何报文"
@@ -142,10 +158,10 @@ async def test_duplicate_send_does_not_publish_twice(client, db, iso, publisher)
     r = await create_cmd(client, w["token1"], w["dev1"].id, boot_id="boot-dup")
     cmd = r.json()
     for _ in range(3):
-        await client.post(f"/api/v2/actuator-commands/{cmd['id']}/send?publish=true",
+        await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/send?publish=true",
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert publisher.count == 1, "重复请求不得产生第二次下发"
-    det = await client.get(f"/api/v2/actuator-commands/{cmd['id']}",
+    det = await client.get(f"{API_PREFIX}/actuator-commands/{cmd['id']}",
                            headers={"Authorization": f"Bearer {w['token1']}"})
     assert det.json()["publish_count"] == 1
 
@@ -154,11 +170,11 @@ async def test_result_before_send_is_rejected(client, db, iso, publisher):
     w = await _world(iso)
     r = await create_cmd(client, w["token1"], w["dev1"].id, boot_id="boot-early")
     cmd = r.json()
-    r = await client.post(f"/api/v2/actuator-commands/{cmd['id']}/result",
-                          json={"status": "executed", "boot_id": "boot-early"},
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/result",
+                          json={"status": "executed", "boot_id": "17"},
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 400, r.text  # 非法流转：pending → executed
-    det = await client.get(f"/api/v2/actuator-commands/{cmd['id']}",
+    det = await client.get(f"{API_PREFIX}/actuator-commands/{cmd['id']}",
                            headers={"Authorization": f"Bearer {w['token1']}"})
     assert det.json()["status"] == "pending", "结果先到不得改写状态"
 
@@ -168,14 +184,14 @@ async def test_late_result_becomes_timeout(client, db, iso, publisher):
     r = await create_cmd(client, w["token1"], w["dev1"].id,
                          boot_id="boot-late", ttl_seconds=10)
     cmd = r.json()
-    await client.post(f"/api/v2/actuator-commands/{cmd['id']}/send?publish=true",
+    await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/send?publish=true",
                       headers={"Authorization": f"Bearer {w['token1']}"})
     # 把过期时间改到过去，模拟设备在命令过期之后才回结果
     c = await w["db"].get(ActuatorCommand, cmd["id"])
     c.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     await w["db"].commit()
 
-    r = await client.post(f"/api/v2/actuator-commands/{cmd['id']}/result",
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/result",
                           json={"status": "executed", "boot_id": "boot-late"},
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 200, r.text
@@ -189,13 +205,13 @@ async def test_restart_generation_change_blocks_old_result(client, db, iso, publ
     w = await _world(iso)
     r = await create_cmd(client, w["token1"], w["dev1"].id, boot_id="boot-gen-1")
     cmd = r.json()
-    await client.post(f"/api/v2/actuator-commands/{cmd['id']}/send?publish=true",
+    await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/send?publish=true",
                       headers={"Authorization": f"Bearer {w['token1']}"})
-    await client.post(f"/api/v2/actuator-commands/{cmd['id']}/ack",
+    await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/ack",
                       headers={"Authorization": f"Bearer {w['token1']}"})
 
     # 设备重启过：结果来自新代次 boot-gen-2，不能套到这一代的命令上
-    r = await client.post(f"/api/v2/actuator-commands/{cmd['id']}/result",
+    r = await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/result",
                           json={"status": "executed", "boot_id": "boot-gen-2"},
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 200, r.text
@@ -210,13 +226,13 @@ async def test_expire_sweep_does_not_republish(client, db, iso, publisher):
     r = await create_cmd(client, w["token1"], w["dev1"].id,
                          boot_id="boot-exp", ttl_seconds=10)
     cmd = r.json()
-    await client.post(f"/api/v2/actuator-commands/{cmd['id']}/send?publish=true",
+    await client.post(f"{API_PREFIX}/actuator-commands/{cmd['id']}/send?publish=true",
                       headers={"Authorization": f"Bearer {w['token1']}"})
     c = await w["db"].get(ActuatorCommand, cmd["id"])
     c.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     await w["db"].commit()
 
-    r = await client.post("/api/v2/actuator-commands/expire-sweep",
+    r = await client.post(API_PREFIX + "/actuator-commands/expire-sweep",
                           headers={"Authorization": f"Bearer {w['token1']}"})
     assert r.status_code == 200, r.text
     body = r.json()
@@ -224,7 +240,7 @@ async def test_expire_sweep_does_not_republish(client, db, iso, publisher):
     assert body["republished"] == 0, "超时一律不自动重发启动（设备侧同样禁止）"
     assert publisher.count == 1, "扫描不得产生任何新报文"
 
-    det = await client.get(f"/api/v2/actuator-commands/{cmd['id']}",
+    det = await client.get(f"{API_PREFIX}/actuator-commands/{cmd['id']}",
                            headers={"Authorization": f"Bearer {w['token1']}"})
     assert det.json()["status"] == "timeout"
     assert det.json()["publish_count"] == 1

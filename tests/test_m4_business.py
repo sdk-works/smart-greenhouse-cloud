@@ -116,9 +116,17 @@ async def test_command_ack_is_not_execution_result(client, iso):
     u, token = await fx.user(db, UserRole.ADMIN, c)
     await db.commit()
 
+    # 控制契约 v1（2026-10-27）：命令必须有可信 device_state 才能创建，
+    # 动作限定为契约 v1 集合（open_valve 属旧草案，已被 move_up 等替代）
+    from app.models.models import ActuatorProfile
+    from datetime import datetime as _dt, timezone as _tz
+    db.add(ActuatorProfile(device_id=dev.id, boot_id=17, session_id="b17-7f3a9c",
+                           state_seq=12, last_command_seq=5, mode="remote",
+                           motion="stopped", uptime_ms=123456,
+                           state_received_at=_dt.now(_tz.utc)))
+    await db.commit()
     created = await client.post(f"{API}/actuator-commands", json={
-        "device_id": dev.id, "action": "open_valve",
-        "params": {"duration": 30}, "desired_state": {"valve": "open"},
+        "device_id": dev.id, "action": "move_up",
     }, headers=auth(token))
     assert created.status_code == 201, created.text
     cid = created.json()["id"]
@@ -138,7 +146,7 @@ async def test_command_ack_is_not_execution_result(client, iso):
     assert body["is_acked"] is True
     assert body["is_executed"] is False, "ACK 绝不等于执行成功"
     assert body["is_finished"] is False
-    assert "已收到 ≠ 执行成功" in body["reminder"]
+    assert "已接收 ≠ 执行成功" in body["reminder"]
 
     # accepted → executing → executed（执行中是必须的中间态）
     running = await client.post(f"{API}/actuator-commands/{cid}/result",

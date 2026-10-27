@@ -4631,7 +4631,7 @@ paths:
       tags:
       - ActuatorCommands 控制命令流转
       summary: Ack Command
-      description: 设备回执"已收到"（sent → accepted）。**这只是 ACK，不是执行结果。**
+      description: 设备回执"已接收"（sent/unknown → accepted）。**这只是 ACK，不是执行结果。**
       operationId: ack_command_api_v1_actuator_commands__command_id__ack_post
       parameters:
       - name: command_id
@@ -4665,7 +4665,7 @@ paths:
       tags:
       - ActuatorCommands 控制命令流转
       summary: Report Result
-      description: 上报真实执行结果（accepted/executing → executed|failed|timeout）。
+      description: 演练用结果上报（正式链路走 MQTT /up 的 command_result，带归属校验）。
       operationId: report_result_api_v1_actuator_commands__command_id__result_post
       parameters:
       - name: command_id
@@ -4688,6 +4688,89 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CommandResultIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/recover:
+    post:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Recover Unknown
+      description: '崩溃恢复（契约 §11.2）：已发布但超过恢复窗口仍无设备回执的命令
+
+        置 unknown（PUBLISH_UNKNOWN），等待结果对账或超时收敛。
+
+        **不重发任何命令**；需要停止时由人工下发新的 stop（新 command_id）。'
+      operationId: recover_unknown_api_v1_actuator_commands_recover_post
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 200
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actuator-commands/expire-sweep:
+    post:
+      tags:
+      - ActuatorCommands 控制命令流转
+      summary: Expire Sweep
+      description: '把已过期的在途命令（含 unknown）收敛为 timeout。
+
+
+        【明确不做自动重发】启动类命令超时后是否重发必须由人决定：
+
+        自动重发会让"电机到底动没动"变成不可判定（契约 §11.2）。'
+      operationId: expire_sweep_api_v1_actuator_commands_expire_sweep_post
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 200
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -5621,27 +5704,27 @@ components:
           title: Device Id
         action:
           type: string
-          maxLength: 50
+          maxLength: 20
           minLength: 1
           title: Action
-        params:
-          type: object
-          title: Params
-        desired_state:
-          type: object
-          title: Desired State
+        channel_id:
+          type: string
+          maxLength: 16
+          minLength: 1
+          title: Channel Id
+          default: curtain_1
+        ttl_ms:
+          type: integer
+          maximum: 60000.0
+          minimum: 1000.0
+          title: Ttl Ms
+          default: 15000
         reason:
           anyOf:
           - type: string
             maxLength: 500
           - type: 'null'
           title: Reason
-        ttl_seconds:
-          type: integer
-          maximum: 86400.0
-          minimum: 10.0
-          title: Ttl Seconds
-          default: 300
       type: object
       required:
       - device_id
@@ -5663,6 +5746,12 @@ components:
             maxLength: 500
           - type: 'null'
           title: Error Message
+        boot_id:
+          anyOf:
+          - type: string
+            maxLength: 36
+          - type: 'null'
+          title: Boot Id
       type: object
       required:
       - status
