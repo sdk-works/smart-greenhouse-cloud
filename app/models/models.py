@@ -164,6 +164,16 @@ class ActuatorCommand(Base):
     """先落库、后发送、等待设备回执的可审计命令。"""
     __tablename__ = "actuator_commands"
     id             = Column(String(36), primary_key=True, default=gen_uuid)
+    # 控制契约 v1 字段（与固件 App/control_cmd.h 对齐）：
+    #   boot_id / session_id / command_seq —— 设备重启后代次变化要靠 boot_id 区分，
+    #   迟到结果若来自旧代次，绝不能套到新命令上。
+    boot_id        = Column(String(36), nullable=True, index=True)
+    session_id     = Column(String(64), nullable=True)
+    command_seq    = Column(Integer, nullable=True)
+    # 发布计数：跨租户/重复请求要求"发布次数可核"，而不是只看状态机
+    publish_count  = Column(Integer, default=0, nullable=False)
+    last_publish_at= Column(DateTime(timezone=True))
+    result_boot_id = Column(String(36), nullable=True)
     command_id     = Column(String(100), unique=True, nullable=False, index=True)
     device_id      = Column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
     greenhouse_id  = Column(String(36), ForeignKey("greenhouses.id"), nullable=True, index=True)

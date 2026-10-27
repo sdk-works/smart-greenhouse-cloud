@@ -99,4 +99,10 @@ def command_view(cmd) -> dict:
         "issued_at": cmd.issued_at, "expires_at": cmd.expires_at,
         "accepted_at": cmd.accepted_at, "completed_at": cmd.completed_at,
         "error_message": cmd.error_message,
+        # 控制闭环可核字段：下发过几次、属于哪一代、设备回的是哪一代
+        "publish_count": getattr(cmd, "publish_count", 0) or 0,
+        "boot_id": getattr(cmd, "boot_id", None),
+        "session_id": getattr(cmd, "session_id", None),
+        "command_seq": getattr(cmd, "command_seq", None),
+        "result_boot_id": getattr(cmd, "result_boot_id", None),
     }
