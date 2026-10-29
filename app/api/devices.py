@@ -44,16 +44,22 @@ def _build_mqtt_topics(device_id: str, greenhouse_id: str = "", prefix: str = "a
 async def list_devices(
     greenhouse_id: Optional[str] = Query(None),
     device_type:   Optional[str] = Query(None),
+    unbound: bool = Query(False, description="true=只返回未绑定大棚的设备（绑定候选池，需 manage_robots）"),
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     query = select(Device)
-    if not is_platform(user):
+    if unbound:
+        # 未绑定大棚的设备不属于任何公司，仅供设备管理员作为绑定候选查看
+        from app.api.auth import check_permission
+        check_permission(user, "manage_robots")
+        query = query.where(Device.greenhouse_id.is_(None))
+    elif not is_platform(user):
         query = query.join(Greenhouse, Device.greenhouse_id == Greenhouse.id).where(
             company_filter(user, Greenhouse.company_id))
-    if greenhouse_id:
+    if greenhouse_id and not unbound:
         query = query.where(Device.greenhouse_id == greenhouse_id)
     if device_type:
         query = query.where(Device.device_type == device_type)

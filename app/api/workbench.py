@@ -311,7 +311,8 @@ async def list_workbench_greenhouses(
 ):
     """工作台列表：档案 + 设备摘要 + 点位数（2026-10-29，前端列表卡片用）。"""
     check_permission(user, "view_data")
-    stmt = select(Greenhouse).order_by(Greenhouse.created_at.desc())
+    # 2026-10-29 反馈：删除后刷新列表不应再出现 -> 列表只返回未停用的大棚
+    stmt = select(Greenhouse).where(Greenhouse.is_active == True).order_by(Greenhouse.created_at.desc())  # noqa: E712
     if not is_platform(user):
         stmt = stmt.where(company_filter(user, Greenhouse.company_id))
     ghs = (await db.execute(stmt)).scalars().all()
