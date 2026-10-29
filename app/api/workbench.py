@@ -21,12 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import check_permission, get_current_user
 from app.core.company_scope import (DEFAULT_BASE_ID, can_access_company,
+                                   company_filter, is_platform,
                                    resolve_company_id)
 from app.core.database import get_db
 from app.core.map_doc import DEFAULT_DEFAULTS, DEFAULT_LAYOUT, normalize_doc
-from app.models.models import (Device, Greenhouse, InspectionPoint,
-                               InspectionVisit, RobotPointMapping, Telemetry,
-                               User)
+from app.models.models import (Device, DeviceStatus, Greenhouse,
+                               InspectionPoint, InspectionVisit,
+                               RobotPointMapping, Telemetry, User)
 
 router = APIRouter()
 
@@ -59,6 +60,7 @@ class WorkbenchProfileUpdate(BaseModel):
     structure: Optional[str] = Field(default=None, max_length=40)
     covering: Optional[str] = Field(default=None, max_length=40)
     actual_area: Optional[float] = Field(default=None, ge=0)
+    layout: Optional[Dict[str, Any]] = None  # 局部合并进 doc["layout"]（如长宽/方向/已核实）
     revision: Optional[int] = Field(default=None, ge=0)
 
 
@@ -180,10 +182,22 @@ def _profile(gh: Greenhouse, doc: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def _device_summary(db: AsyncSession, gh_id: str) -> Dict[str, int]:
+    """每棚设备摘要：总数 + 在线数（2026-10-29：每棚规划至少一套监测设备，0 台要能在前端看见）。"""
+    total = (await db.execute(
+        select(func.count(Device.id)).where(Device.greenhouse_id == gh_id))).scalar() or 0
+    online = (await db.execute(
+        select(func.count(Device.id)).where(
+            Device.greenhouse_id == gh_id,
+            Device.status == DeviceStatus.ONLINE))).scalar() or 0
+    return {"total": int(total), "online": int(online)}
+
+
 async def _payload(db: AsyncSession, gh: Greenhouse) -> Dict[str, Any]:
     doc = normalize_doc(gh.map_data)
     points = await _load_points(db, gh, doc)
     return {
+        "devices": await _device_summary(db, gh.id),
         "profile": _profile(gh, doc),
         "map": {
             "revision": int(doc.get("revision") or 0),
@@ -279,12 +293,56 @@ async def update_workbench_profile(
         doc["structure"] = data["structure"]
     if data.get("covering"):
         doc["covering"] = data["covering"]
+    if isinstance(data.get("layout"), dict):
+        # 只合并传入的键（如 length_value/width_value/calibrated），不动其余布局字段
+        doc["layout"] = _merge(doc.get("layout") or DEFAULT_LAYOUT, data["layout"])
 
     doc["revision"] = int(doc.get("revision") or 0) + 1
     gh.map_data = doc
     await db.commit()
     await db.refresh(gh)
     return {"success": True, "revision": doc["revision"]}
+
+
+@router.get("/greenhouses")
+async def list_workbench_greenhouses(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """工作台列表：档案 + 设备摘要 + 点位数（2026-10-29，前端列表卡片用）。"""
+    check_permission(user, "view_data")
+    stmt = select(Greenhouse).order_by(Greenhouse.created_at.desc())
+    if not is_platform(user):
+        stmt = stmt.where(company_filter(user, Greenhouse.company_id))
+    ghs = (await db.execute(stmt)).scalars().all()
+    out = []
+    for gh in ghs:
+        item = {
+            "id": gh.id, "name": gh.name, "location": gh.location,
+            "crop_type": gh.crop_type, "area": gh.area,
+            "is_active": gh.is_active,
+            "devices": await _device_summary(db, gh.id),
+        }
+        doc = normalize_doc(gh.map_data)
+        item["point_count"] = len(doc.get("points") or [])
+        out.append(item)
+    return out
+
+
+@router.delete("/greenhouses/{greenhouse_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workbench_greenhouse(
+    greenhouse_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """工作台删除大棚：软删（is_active=False），语义与 /greenhouses 旧接口一致。
+
+    不做物理删除：telemetry / inspection_points / 巡检记录仍挂在棚上，可追溯。
+    """
+    check_permission(user, "manage_greenhouses")
+    gh = await _get_scoped(db, greenhouse_id, user)
+    gh.is_active = False
+    await db.commit()
 
 
 @router.get("/greenhouses/{greenhouse_id}/points/{point_id}")
