@@ -89,9 +89,9 @@ function TopBar({ alerts, onClearAlerts, wsStatus, mobile, onMenu }) {
         <div style={{ fontSize:16, fontWeight:600, color:C.text }}>{title}</div>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-        {!mobile && <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color: wsStatus==='connected'?C.tealDk:'#999' }}>
-          <div style={{ width:6, height:6, borderRadius:'50%', background:wsStatus==='connected'?C.teal:'#ccc' }} />
-          {wsStatus==='connected' ? '实时通道已连接' : '实时通道连接中...'}
+        {!mobile && <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color: wsStatus==='connected'?C.tealDk:(wsStatus==='unauthorized'||wsStatus==='forbidden'?'#c0392b':'#999') }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:wsStatus==='connected'?C.teal:(wsStatus==='unauthorized'||wsStatus==='forbidden'?'#c0392b':'#ccc') }} />
+          {wsStatus==='connected' ? '实时通道已连接' : (wsStatus==='unauthorized' ? '实时通道未登录' : wsStatus==='forbidden' ? '实时通道无权限' : '实时通道连接中...')}
         </div>}
 
         {!mobile && <Link to="/landing" style={{ display:'flex', alignItems:'center', gap:4, color:C.tealDk, textDecoration:'none', fontSize:12 }}>

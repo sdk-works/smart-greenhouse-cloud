@@ -172,7 +172,10 @@ export function createWebSocket(onMessage, onStatus = () => {}) {
   let manuallyClosed = false;
 
   function connect() {
-    ws = new WebSocket(wsUrl);
+    // 后端 WS 要求 ?token=（浏览器 WS 无法自定义 Header），每次重连都重新读取
+    const tk = localStorage.getItem('token');
+    const url = tk ? `${wsUrl}?token=${encodeURIComponent(tk)}` : wsUrl;
+    ws = new WebSocket(url);
     ws.onopen = () => {
       onStatus('connected');
       console.log('[WS] 已连接');
@@ -186,9 +189,15 @@ export function createWebSocket(onMessage, onStatus = () => {}) {
         if (data !== 'pong') onMessage(data);
       } catch {}
     };
-    ws.onclose = () => {
-      onStatus('connecting');
+    ws.onclose = (e) => {
       clearInterval(pingTimer);
+      // 4401 未登录/token 失效；4403 已登录但无权访问：停止重连，等待重新登录或刷新页面
+      if (e.code === 4401 || e.code === 4403) {
+        console.warn(`[WS] 连接被拒绝(${e.code})，停止自动重连`);
+        onStatus(e.code === 4403 ? 'forbidden' : 'unauthorized');
+        return;
+      }
+      onStatus('connecting');
       if (!manuallyClosed) reconnectTimer = setTimeout(connect, 3000);
     };
     ws.onerror = () => ws.close();
