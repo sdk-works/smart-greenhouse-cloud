@@ -9,7 +9,9 @@
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.models.models import Device, DeviceStatus, Greenhouse, UserRole
+import uuid
+
+from app.models.models import Device, DeviceStatus, DeviceType, Greenhouse, UserRole
 from tests.conftest import auth
 
 API = settings.API_PREFIX
@@ -89,6 +91,34 @@ async def test_delete_soft(client, iso):
     assert active is False
     g = await client.get(f"{API}/workbench/greenhouses/{gh.id}", headers=auth(token))
     assert g.status_code == 200
+    # 2026-10-29 反馈：删除后刷新列表不应再出现
+    lst = await client.get(f"{API}/workbench/greenhouses", headers=auth(token))
+    assert all(i["id"] != gh.id for i in lst.json())
+
+
+async def test_devices_unbound_pool(client, iso):
+    """unbound=true 返回未绑定大棚的设备；绑定后再查不再出现。"""
+    fx, db = iso
+    c, gh, token = await _mk(fx, db, "wbu")
+    # 造一台未绑定设备（无 greenhouse）
+    from app.models.models import Device as D
+    d = D(id=str(uuid.uuid4()), device_id=f"pool-{uuid.uuid4().hex[:8]}",
+          name="待绑定", device_type=DeviceType.SENSOR, status=DeviceStatus.ONLINE)
+    db.add(d)
+    await db.commit()
+    r = await client.get(f"{API}/devices/?unbound=true", headers=auth(token))
+    assert r.status_code == 200, r.text
+    ids = [x["device_id"] for x in r.json()]
+    assert d.device_id in ids
+    # 绑定到棚（PUT greenhouse_id）后不再是未绑定
+    rb = await client.put(f"{API}/devices/{d.id}", headers=auth(token),
+                          json={"greenhouse_id": gh.id})
+    assert rb.status_code == 200, rb.text
+    r2 = await client.get(f"{API}/devices/?unbound=true", headers=auth(token))
+    assert d.device_id not in [x["device_id"] for x in r2.json()]
+    # 棚下设备列表可见
+    r3 = await client.get(f"{API}/devices/?greenhouse_id={gh.id}", headers=auth(token))
+    assert d.device_id in [x["device_id"] for x in r3.json()]
 
 
 async def test_devices_summary_mixed_status(client, iso):
