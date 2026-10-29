@@ -190,7 +190,13 @@ async def test_cache_keys_unchanged_by_company():
             return self.store.get(k)
 
     r = R()
-    cs = CacheService(r, company_id="company-a")
-    await cs.set("device:status:JY001", {"ok": True})
-    assert "device:status:JY001" in r.store
-    assert not any("company-a" in k for k in r.store)
+    # M1（432af3d）语义：缓存键带 c:<company>: 前缀——不同公司互不覆盖，
+    # 发布通道仍按公司频道隔离（publish 语义与 ac133fa 一致，键隔离更严格）。
+    cs_a = CacheService(r, company_id="company-a")
+    cs_b = CacheService(r, company_id="company-b")
+    await cs_a.set("device:status:JY001", {"ok": True, "owner": "a"})
+    await cs_b.set("device:status:JY001", {"ok": True, "owner": "b"})
+    assert (await cs_a.get("device:status:JY001"))["owner"] == "a"
+    assert (await cs_b.get("device:status:JY001"))["owner"] == "b"
+    assert any("company-a" in k for k in r.store)
+    assert any("company-b" in k for k in r.store)
