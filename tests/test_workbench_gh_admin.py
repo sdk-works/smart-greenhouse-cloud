@@ -9,7 +9,7 @@
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.models.models import Device, DeviceStatus, UserRole
+from app.models.models import Device, DeviceStatus, Greenhouse, UserRole
 from tests.conftest import auth
 
 API = settings.API_PREFIX
@@ -83,10 +83,10 @@ async def test_delete_soft(client, iso):
     c, gh, token = await _mk(fx, db, "wbc")
     r = await client.delete(f"{API}/workbench/greenhouses/{gh.id}", headers=auth(token))
     assert r.status_code == 204, r.text
-    db.expire_all()
-    rows = (await db.execute(
-        select(type(gh)).where(type(gh).id == gh.id))).scalars().all()
-    assert len(rows) == 1 and rows[0].is_active is False
+    from app.core.database import AsyncSessionLocal as _S
+    async with _S() as s2:
+        active = await s2.scalar(select(Greenhouse.is_active).where(Greenhouse.id == gh.id))
+    assert active is False
     g = await client.get(f"{API}/workbench/greenhouses/{gh.id}", headers=auth(token))
     assert g.status_code == 200
 
